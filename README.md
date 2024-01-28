@@ -1,7 +1,7 @@
 # C-Star
 A WhatsApp bot by J.D. Chicatti.\
-Thesis project. B. Sc. Computer Engineering and B. Sc. Mechatronics Engineering.
-
+Thesis project to earn the degrees of B. Sc. Computer Engineering and B. Sc. Mechatronics Engineering.
+***
 Save on internet bills (mobile data/satellite broadband). Receive broswer-like content through WhatsApp.
 
 # Features
@@ -24,8 +24,14 @@ Prerequisites:
 You can verify these prerequisites by running the `node` and `npm` commands.
 
 1. Once you have that, you need to download this repository as ZIP and extract it to your local files.
-2. The first time running C Star you need to install the required NPM dependencies. You can do this easily by running the `dependencies.bat` batch file on Windows, or by executing the equivalent command for your OS inside the `/project` folder(namely the `npm i` command).
-3. With that set up, you can now run the node with the `run.bat` batch file on Windows, or by running the `node v0.1.6.js` command inside the `/project` folder.
+2. The first time running C Star you need to install the required NPM dependencies. You can do this easily by running the `dependencies.bat` batch file on Windows, or by executing the equivalent command for your OS inside the `/project` folder.
+```
+npm install whatsapp-web.js axios qrcode-terminal fs gpti qrcode readline fast-csv
+```
+3. With that set up, you can now run the node with the `run.bat` batch file on Windows, or by running the following command inside the `/project` folder.
+```
+node v0.1.6.js
+```
 4. When the node is running, you will be prompted with a QR code (it will also be saved to the `/downloads` folder) which you need to scan using the "Link a Device" feature on WhatsApp.
 
 C-Star is now ready and running. Be sure to personalize the preset messages to your preference beforehand.
