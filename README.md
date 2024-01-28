@@ -16,12 +16,18 @@ For any given search term:
 
 Since every message is handled as plain text, WhatsApp media and URLs you will be harnessing the unlimited data allocated for social media and messaging apps.
 
-# How to install
+# How to set up
 Prerequisites:
 - A computer system with an Internet connection.
 - A version of Node.js with the Node Package Manager (NPM).
 
 You can verify these prerequisites by running the `node` and `npm` commands.
 
+1. Once you have that, you need to download this repository as ZIP and extract it to your local files.
+2. The first time running C Star you need to install the required NPM dependencies. You can do this easily by running the `dependencies.bat` batch file on Windows, or by executing the equivalent command for your OS inside the project folder(namely `npm i`).
+3. With that set up, you can now run the node with the `run.bat` batch file on Windows, or by running the `node v0.1.6.js` command inside the project folder.
+4. When the node is running, you will be prompted with a QR code (which will also be saved into the downloads folder) which you need to scan using the "Link a Device" feature on WhatsApp.
+
+Be sure
 # How it works
 Find the context, objective, analysis of the problem, methodology, design of the solution, architecture, implementation, standards used, tests, results and their analysis in the thesis document available [here](example.com).
