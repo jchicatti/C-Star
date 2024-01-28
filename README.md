@@ -24,6 +24,9 @@ Prerequisites:
 You can verify these prerequisites by running the `node` and `npm` commands.
 
 1. Once you have that, you need to download this repository as ZIP and extract it to your local files.
+![image](https://github.com/jchicatti/C-Star/assets/56322123/a89c7c8d-79d2-4ca4-9eac-a02b76a021fa)
+
+
 2. The first time running C Star you need to install the required NPM dependencies. You can do this easily by running the `dependencies.bat` batch file on Windows, or by executing the equivalent command for your OS inside the `/project` folder.
 ```
 npm install whatsapp-web.js axios qrcode-terminal fs gpti qrcode readline fast-csv
