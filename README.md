@@ -8,7 +8,7 @@ Save on internet bills (mobile data/satellite broadband). Receive browser-like c
 # Try it now!
 For free. No installs. To start using, just send a WhatsApp message to:
 ```
-+52 951 171 3498
++52 56 4137 8115
 ```
 
 # Features
