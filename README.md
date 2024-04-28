@@ -3,7 +3,7 @@
 A WhatsApp bot by J.D. Chicatti.\
 Thesis project to earn the degrees of B. Sc. Computer Engineering and B. Sc. Mechatronics Engineering.
 ***
-Save on internet bills (mobile data/satellite broadband). Receive broswer-like content through WhatsApp.
+Save on internet bills (mobile data/satellite broadband). Receive browser-like content through WhatsApp.
 ![cstar_ratio_-transformed (1)](https://github.com/jchicatti/C-Star/assets/56322123/a9358239-8705-4264-bfb2-c5502bcf00fe)
 # Features
 - Receive help, menu and info preset messages.
