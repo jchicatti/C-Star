@@ -21,7 +21,7 @@ For any given search term:
 - Receive **Wikipedia** articles and pages (including disambiguations) as plain text  alongside source reference.
 - Receive **DALL-E** generated artistic depictions as WhatsApp media.
 
-Since every message is handled as plain text, WhatsApp media and URLs you will be harnessing the unlimited data allocated for social media and messaging apps.
+Since every message is handled as plain text, WhatsApp media and URLs, you will be harnessing the unlimited mobile data that is allowed for social media and messaging apps.
 
 # How to set it up
 Prerequisites:
