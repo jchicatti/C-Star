@@ -41,4 +41,4 @@ node v0.1.6.js
 C-Star is now ready and running. Be sure to personalize the preset messages to your preference beforehand.
 
 # How it works
-You may find the detailed context, objective, analysis of the problem, methodology, design of the solution, architecture, implementation, standards used, tests, results and their analysis in the full thesis document available [here](example.com).
+You may find the detailed context, objective, analysis of the problem, methodology, design of the solution, architecture, implementation, standards used, tests, results and their analysis in the full thesis document available **IN SPANISH** [here](example.com).
