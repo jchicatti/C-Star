@@ -6,7 +6,7 @@ Thesis project to earn the degrees of B. Sc. Computer Engineering and B. Sc. Mec
 Save on internet bills (mobile data/satellite broadband). Receive browser-like content through WhatsApp.
 ![cstar_ratio_-transformed (1)](https://github.com/jchicatti/C-Star/assets/56322123/a9358239-8705-4264-bfb2-c5502bcf00fe)
 # Try it now!
-For free. No installs. Just send a message to:
+For free. No installs. To start using, just send a WhatsApp message to:
 ```
 +52 951 171 3498
 ```
