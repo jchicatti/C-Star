@@ -10,6 +10,8 @@ For free. No installs. To start using, just send a WhatsApp message to:
 ```
 +52 56 4137 8115
 ```
+Looking for a Watchdog Timer for a server hosting a service like this one?
+That project's code is available [here](https://github.com/jchicatti/SHEDD).
 
 # Features
 - Receive help, menu and info preset messages.
