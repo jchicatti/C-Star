@@ -1,17 +1,20 @@
-# C-Star
+<div align="center">
+    <br />
+    <p>
+        <img src="https://github.com/jchicatti/C-Star/assets/56322123/a9358239-8705-4264-bfb2-c5502bcf00fe" title="c-star" alt="CSTAR Github Repo" width="1000" /></a>
+    </p>
+    <br />
+    <p>
+		    <a href="https://github.com/jchicatti/SHEDD"><img src="https://github.com/user-attachments/assets/230e3cd8-8edd-4c49-ac69-804fcd5c8b76" alt="watchdog" height="50"/></a>
+        <a href=""><img src="https://github.com/user-attachments/assets/23ef8f9b-b689-479e-85f8-6a45ea6ab17e" alt="demo" height="50"/></a>
+        <a href=""><img src="https://github.com/user-attachments/assets/4663ae0d-5581-452b-a73f-a66ef8a16506" alt="installer" height="50"/></a>
+	</p>
+</div>
 
-A WhatsApp bot by J.D. Chicatti.\
-Thesis project to earn the degrees of B. Sc. Computer Engineering and B. Sc. Mechatronics Engineering.
-***
-Save on internet bills (mobile data/satellite broadband). Receive browser-like content through WhatsApp.
-![cstar_ratio_-transformed (1)](https://github.com/jchicatti/C-Star/assets/56322123/a9358239-8705-4264-bfb2-c5502bcf00fe)
-# Try the demo now!
-For free. No installs. To start using, just send a WhatsApp message to:
-```
-+52 56 4137 8115
-```
-Looking for a Watchdog Timer for a server hosting a service like this one?
-That project's code is available [here](https://github.com/jchicatti/SHEDD).
+# C-Star
+A WhatsApp-bot server.
+
+Save on internet bills. Receive browser-like content through WhatsApp.
 
 # Features
 - Receive help, menu and info preset messages.
@@ -25,16 +28,9 @@ For any given search term:
 
 Since every message is handled as plain text, WhatsApp media and URLs, you will be harnessing the unlimited mobile data that is allowed for social media and messaging apps.
 
-# How to set it up
-Prerequisites:
-- A computer system with an Internet connection.
-- A version of Node.js with the Node Package Manager (NPM).
-
-You can verify these prerequisites by running the `node` and `npm` commands.
-
-1. Once you have that, you need to download this repository as ZIP and extract it to your local files.
+# DIY setup alternative. No admin privileges needed.
+If you do not have access to Git neither to admin privileges, then you need to download this repository as ZIP and extract it to your local files.
 ![image](https://github.com/jchicatti/C-Star/assets/56322123/a89c7c8d-79d2-4ca4-9eac-a02b76a021fa)
-
 
 2. The first time running C Star you need to install the required NPM dependencies. You can do this easily by running the `dependencies.bat` batch file on Windows, or by executing the equivalent command for your OS inside the `/project` folder.
 ```
@@ -45,6 +41,16 @@ npm install whatsapp-web.js axios qrcode-terminal fs gpti qrcode readline fast-c
 node v0.1.6.js
 ```
 4. When the node is running, you will be prompted with a QR code (it will also be saved to the `/downloads` folder) which you need to scan using the "Link a Device" feature on WhatsApp.
+
+Or just run the installer.
+
+# Try the demo now!
+For free. No installs. To start using, just send a WhatsApp message to:
+```
++52 56 4137 8115
+```
+Looking for a Watchdog Timer for a server hosting a service like this one?
+That project's code is available [here](https://github.com/jchicatti/SHEDD).
 
 C-Star is now ready and running. Be sure to personalize the preset messages to your preference beforehand.
 
