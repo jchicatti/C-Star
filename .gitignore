@@ -1,0 +1,11 @@
+node_modules/
+secrets.js
+
+media/*
+!media/.keep
+
+dist/
+*.exe
+
+.DS_Store
+Thumbs.db
