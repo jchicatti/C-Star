@@ -1,11 +1,11 @@
 {
   "name": "cstar",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A WhatsApp bot that delivers AI-powered responses through mobile data-friendly channels.",
-  "main": "src/v0.2.1.js",
-  "bin": "src/v0.2.1.js",
+  "main": "src/v0.2.2.js",
+  "bin": "src/v0.2.2.js",
   "scripts": {
-    "start": "node v0.2.1.js",
+    "start": "node v0.2.2.js",
     "validate": "node scripts/validateSetup.js"
   },
   "author": "Josué Chicatti",
