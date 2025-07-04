@@ -1,11 +1,12 @@
 node_modules/
 secrets.js
+media/
+dist/*
+src/chrome-win/
+src/.wwebjs_auth/
+src/qr.png
+testExecutable.bat
 
-media/*
-!media/.keep
-
-dist/
-*.exe
-
+buildExecutable.bat
 .DS_Store
 Thumbs.db

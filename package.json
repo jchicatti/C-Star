@@ -1,0 +1,29 @@
+{
+  "name": "cstar",
+  "version": "0.2.1",
+  "description": "A WhatsApp bot that delivers AI-powered responses through mobile data-friendly channels.",
+  "main": "src/v0.2.1.js",
+  "bin": "src/v0.2.1.js",
+  "scripts": {
+    "start": "node v0.2.1.js",
+    "validate": "node scripts/validateSetup.js"
+  },
+  "author": "Josué Chicatti",
+  "license": "Proprietary",
+  "dependencies": {
+    "fast-csv": "^4.3.6",
+    "node-fetch": "^2.7.0",
+    "qrcode": "^1.5.1",
+    "qrcode-terminal": "^0.12.0",
+    "readline": "^1.3.0",
+    "whatsapp-web.js": "^1.22.1"
+  },
+  "pkg": {
+    "assets": [
+      "media/*",
+      "logs/*",
+      "configs/*.js"
+    ],
+    "scripts": []
+  }
+}

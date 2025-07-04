@@ -9,37 +9,54 @@
 	Do not modify this section.
 	No modifique este bloque de código.
 */
-const versionTag = '0.2.0';
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const versionTag = '0.2.1';
+const configConstants = require('../configs/configv0.2.1.js');
+const secrets = require('../configs/secrets.js');
 const { MessageMedia } = require('whatsapp-web.js');
-const axios = require('axios');
+const fetch = require('node-fetch');
 const qrterminal = require('qrcode-terminal');
 const qrcode = require('qrcode');
 const fs = require('fs');
 const fsp = fs.promises;
 const readline = require('readline');
 const fastcsv = require('fast-csv');
-
 const wwebVersion = '2.2412.54';
+const path = require('path');
+// Para distinguir mi ambiente de pruebas del .exe generado para dist.
+const isPkg = typeof process.pkg !== 'undefined';
+const basePath = isPkg ? process.cwd() : __dirname;
+
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const client = new Client({
+    puppeteer: {
+        executablePath: path.join(basePath, 'chrome-win', 'chrome.exe'),
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    },
     webVersionCache: {
         type: 'remote',
         remotePath: `https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/${wwebVersion}.html`,
     },
-	authStrategy: new LocalAuth()
+    authStrategy: new LocalAuth()
 });
 
-const { gpt, dalle, lexica, prodia, util } = require("gpti");
 const startTime = new Date();
 // Helper function to remove accents/diacritics from a string
 function removeAccents(str) {return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");}
 
 /*	CONFIGURATIONS, CONSTANTS AND SECRETS IMPORT
 */
-const configConstants = require('../configs/config.v0.2.0.js');
-const secrets = require('../configs/secrets.js');
-for (const [key, value] of Object.entries(configConstants)) { global[key] = value; }
-for (const [key, value] of Object.entries(secrets)) { global[key] = value; }
+
+// Load config into globals (assumes these objects exist)
+for (const [key, value] of Object.entries(configConstants)) global[key] = value;
+for (const [key, value] of Object.entries(secrets)) global[key] = value;
+// Build paths
+const logsPath = path.join(basePath, logsFolder);
+const mediaPath = path.join(basePath, mediaFolder);
+const csvLogfilePath = path.join(logsPath, logFileName);
+// Ensure folders exist
+if (!fs.existsSync(mediaPath)) fs.mkdirSync(mediaPath, { recursive: true });
+if (!fs.existsSync(logsPath)) fs.mkdirSync(logsPath, { recursive: true });
 
 /* LOG SAVING SECTION
 */
@@ -60,6 +77,7 @@ function formatDate(date) {
     const options = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' };
     return date.toLocaleDateString('en-US', options).replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$1-$2');
 }
+
 async function writeLogToFile() {
     // Check if all counts are zero
     const allZero = Object.values(functionCounts).every(count => count === 0);
@@ -134,6 +152,9 @@ rl.on('line', async (input) => {
             }
             console.log('\nBroadcast message sent to all authorized IDs.');
             break;
+		case 'fetch':
+			await testFetch();
+			break;
         case 'listcontacts':
             try {
                 const contacts = await client.getContacts();
@@ -220,29 +241,35 @@ rl.on('line', async (input) => {
 */
 const getOpenAIResponse = async (incomingMessage) => {
 	try {
-		const gpt3Response = await axios.post(
-		'https://api.openai.com/v1/chat/completions',
-		{
-			messages: [{ role: 'user', content: contextDelimiter + incomingMessage}],
-			max_tokens: maxTokens,
-			model: 'gpt-3.5-turbo'
-		},
-		{
+		const response = await fetch('https://api.openai.com/v1/chat/completions', {
+			method: 'POST',
 			headers: {
 				'Authorization': `Bearer ${openaiApiKey}`,
 				'Content-Type': 'application/json'
-			}
+			},
+			body: JSON.stringify({
+				messages: [{ role: 'user', content: contextDelimiter + incomingMessage }],
+				max_tokens: maxTokens,
+				model: 'gpt-3.5-turbo'
+			})
+		});
+		const data = await response.json();
+		console.dir(data, { depth: null });
+		if (!data?.choices?.[0]?.message?.content) {
+			console.dir(data, { depth: null });
+			throw new Error('OpenAI response missing choices[0].message.content');
 		}
-		);
-		return await gpt3Response.data.choices[0].message.content.trim();
+		return data.choices[0].message.content.trim();
+		console.dir(data, "Exit but no catch.");
 	} catch (error) {
-		console.error('An error occurred:', error.response ? error.response.data : error);
+		console.error('An error occurred:', error);
 		return 'I encountered an error. Please try again later.';
 	}
 };
 
 /*	Free GPT FETCHING SECTION
 */
+/*
 const getFreeGpt = (query) => {
     return new Promise((resolve, reject) => {
         gpt({
@@ -255,30 +282,44 @@ const getFreeGpt = (query) => {
             } else {
                 resolve(data.gpt);
             }});});};
+*/
+
+const testFetch = async () => {
+	try {
+		const res = await fetch('https://jsonplaceholder.typicode.com/todos/1');
+		const data = await res.json();
+		console.log('✅ Fetch succeeded:\n', data);
+	} catch (err) {
+		console.error('❌ Fetch failed:', err.message || err);
+	}
+};
 
 /*	IMAGE FETCHING SECTION
 */
 const getImageSource = async (searchTerm) => {
-	const response = await axios.get('https://api.bing.microsoft.com/v7.0/images/search', {
-		params: { q: searchTerm, imageType : 'Photo' },  // 'Photo' limits results to JPG and PNG
-		headers : { 'Ocp-Apim-Subscription-Key': bingSearchApiKey }
+	const params = new URLSearchParams({ q: searchTerm, imageType: 'Photo' });
+	const response = await fetch(`https://api.bing.microsoft.com/v7.0/images/search?${params.toString()}`, {
+		headers: { 'Ocp-Apim-Subscription-Key': bingSearchApiKey }
 	});
-	return response.data.value[0];
+	const data = await response.json();
+	return data.value[0];
 };
 const getImageMedia = async (imageSource) => {
 	const firstImageURL = imageSource.thumbnailUrl;
-	// Downloading the image
-	const imageResponse = await axios.get(firstImageURL, { responseType: 'arraybuffer' });
-	// Determine the file extension from the Content-Type header
-	const contentType = imageResponse.headers['content-type'];
-	const fileExtension = contentType.split('/')[1];  // Assumes contentType is like 'image/jpeg' or 'image/png'
-	// Save the image with the correct file extension
-	const imagePath = `${DOWNLOADS_FOLDER}\\image.${ fileExtension }`;
-	fs.writeFileSync(imagePath, imageResponse.data);
-	// Sending the image as MEDIA. Not as URL as that would defeat the purpose.
-	const imageMedia = new MessageMedia(`image/${ fileExtension }`, imageResponse.data.toString('base64'));
+	const imageResponse = await fetch(firstImageURL);
+
+	const arrayBuffer = await imageResponse.arrayBuffer();
+	const buffer = Buffer.from(arrayBuffer);
+	const contentType = imageResponse.headers.get('content-type');
+	const fileExtension = contentType.split('/')[1];
+
+	const imagePath = path.join(DOWNLOADS_FOLDER, `image.${fileExtension}`);
+	fs.writeFileSync(imagePath, buffer);
+
+	const imageMedia = new MessageMedia(`image/${fileExtension}`, buffer.toString('base64'));
 	return imageMedia;
 };
+
 const getInfoMessage = async (imageSource) => {
 	const imageInfo = imageSource;
 	let authorOrPublisher = 'Unknown';
@@ -300,38 +341,44 @@ const getInfoMessage = async (imageSource) => {
 /*	VIDEO FETCHING 
 */
 const getVideoSource = async (searchTerm) => {
-	const response = await axios.get('https://api.bing.microsoft.com/v7.0/videos/search', {
-		params: { q: searchTerm },
+	const params = new URLSearchParams({ q: searchTerm });
+	const response = await fetch(`https://api.bing.microsoft.com/v7.0/videos/search?${params.toString()}`, {
 		headers: { 'Ocp-Apim-Subscription-Key': bingSearchApiKey }
 	});
-	const firstVideoUrl = response.data.value[0].contentUrl;
-	return firstVideoUrl;
+	const data = await response.json();
+	return data.value[0].contentUrl;
 };
+
 
 /*	WIKIPEDIA FETCHING SECTION
 */
 const getWikipediaResponse = async (query, langCode) => {
-    try {
-        let searchUrl = `https://${langCode}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json`;
-        let searchResponse = await axios.get(searchUrl);
-        let pages = searchResponse.data.query.search;
-        if (pages.length > 0) {
-            let pageId = pages[0].pageid;
-            let contentUrl = `https://${langCode}.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&explaintext&pageids=${pageId}&format=json`;
-            let contentResponse = await axios.get(contentUrl);
-            let page = contentResponse.data.query.pages[pageId];
-            let extract = page.extract;
-            let truncatedText = extract.split(" ").slice(0, 1000).join(" "); // Truncate to 1000 words
-            let pageUrl = `https://${langCode}.wikipedia.org/?curid=${pageId}`;
-            return { text: truncatedText, url: pageUrl };
-        } else {
-            return { text: "No results found for your query.", url: "" };
-        }
-    } catch (error) {
-        console.error('An error occurred:', error.response ? error.response.data : error);
-        return { text: "I encountered an error. Please try again later.", url: "" };
-    }
+	try {
+		const searchUrl = `https://${langCode}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json`;
+		const searchResponse = await fetch(searchUrl);
+		const searchData = await searchResponse.json();
+
+		const pages = searchData.query.search;
+		if (pages.length > 0) {
+			const pageId = pages[0].pageid;
+			const contentUrl = `https://${langCode}.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&explaintext&pageids=${pageId}&format=json`;
+			const contentResponse = await fetch(contentUrl);
+			const contentData = await contentResponse.json();
+
+			const page = contentData.query.pages[pageId];
+			const extract = page.extract;
+			const truncatedText = extract.split(" ").slice(0, 1000).join(" ");
+			const pageUrl = `https://${langCode}.wikipedia.org/?curid=${pageId}`;
+			return { text: truncatedText, url: pageUrl };
+		} else {
+			return { text: "No results found for your query.", url: "" };
+		}
+	} catch (error) {
+		console.error('An error occurred:', error);
+		return { text: "I encountered an error. Please try again later.", url: "" };
+	}
 };
+
 /*
 const getFreeGpt = (query) => {
     return new Promise((resolve, reject) => {
@@ -408,6 +455,7 @@ const getDalleMiniMedia = (query) => {
 */
 client.on('message', async msg => {
 	//console.log(`Received message from ${msg.from}: ${msg.body}`);
+	/*
 		if (msg.body.toLowerCase().startsWith('!gpt')) {
 			const query = msg.body.slice(5).trim();
 			if (query.length > 0) {
@@ -428,9 +476,10 @@ client.on('message', async msg => {
 			}
 			functionCounts.txtCount++;
 		}
+		*/
 		/*	CHATBOT RESPONSE HANDLING
 		*/
-		else if (msg.body.toLowerCase().startsWith('rico')) {
+		if (msg.body.toLowerCase().startsWith('rico')) {
 			const query = msg.body.slice(5).trim();
 
 			if (query.length > 0) {
