@@ -6,9 +6,9 @@ module.exports = {
 	*/
 	cmdDelimiter: '!',
 	ollamaCmd: 'test',
-	mediaFolder : 'media',
-	qrimagePath : 'qr.png',
-	logsFolder: 'logs',
+	mediaFolderName : 'media',
+	qrImageName : 'qr.png',
+	logsFolderName : 'logs',
 	logFileName : 'logfile.csv',
 	//MAX Tokens per GPT response:
 	maxTokens : 200,

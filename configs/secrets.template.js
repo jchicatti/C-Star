@@ -7,5 +7,4 @@ module.exports = {
   listenerIDs : ['1112223339@c.us'], // List of IDs to listen to (admins?)
   inboxAddress : '1112223339@c.us', // Suggestion box
   telegramToken: 'YOUR_TELEGRAM_BOT_TOKEN_HERE',
-  otherPrivateKey: '...'
 }
