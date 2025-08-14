@@ -10,6 +10,7 @@ const configConstants = require('../configs/config.js');
 const secrets = require('../configs/secrets.js');
 const { parseDriveArgs, handleDriveCommand } = require(path.resolve(__dirname, '..', 'scripts', 'driveHandler.js'));
 const { parseArmArgs, handleArmCommand } = require(path.resolve(__dirname, '..', 'scripts', 'armHandler.js'));
+const { parseIKArgs, handleIKCommand } =  require(path.resolve(__dirname, '..', 'scripts', 'ikHandler.js'));
 /*	REQUIRED NODES SECTION
 	Do not modify this section.
 	No modifique este bloque de código.
@@ -599,7 +600,7 @@ client.on('message', async msg => {
 		}
 	}
 	else if (lowerBody.startsWith('@arm')) {
-		const argsText = msg.body.slice('@arm'.length).trim(); // posicional
+		const argsText = msg.body.slice('@arm'.length).trim();
 		const parsed = parseArmArgs(argsText);
 		if (!parsed.ok) {
 			await client.sendMessage(msg.from, noQueryArm || 'error');
@@ -613,6 +614,30 @@ client.on('message', async msg => {
 		} catch (e) {
 			console.error('arm failed:', e.code || '', e.message || e);
 			await client.sendMessage(msg.from, genericError || 'error');
+		}
+	}
+	else if (lowerBody.startsWith('@ik')) {
+		const argsText = msg.body.slice(4).trim(); // formato: l1 l2 x y [deg|rad]
+		const parsed = parseIKArgs(argsText);
+		if (!parsed.ok) {
+			await client.sendMessage(msg.from, noQueryIK);
+			return;
+		}
+		try {
+			const res = await handleIKCommand(parsed.params);
+			const media = new MessageMedia('image/png', fs.readFileSync(res.img).toString('base64'), 'ik2.png');
+			const s = res.solutions; // [[th1,th2],[th1b,th2b]]
+			const units = res.units || parsed.params.units;
+			const a = s[0].map(v => v.toFixed(3)).join(', ');
+			const b = s[1].map(v => v.toFixed(3)).join(', ');
+			await client.sendMessage(msg.from, media, { caption: `Soluciones (${units}):\n• codo arriba: ${a}\n• codo abajo: ${b}` });
+		} catch (e) {
+			console.error('ik failed:', e.code || '', e.message || e);
+			const txt =
+			e.code === 'EUNREACHABLE' ? (noIKReach) :
+			e.code === 'EBADPARAMS'   ? (noQueryIK) :
+			(genericError || 'Algo salió mal. Inténtalo más tarde.');
+			await client.sendMessage(msg.from, txt);
 		}
 	}
 	else if (lowerBody.startsWith('!pro')) {
