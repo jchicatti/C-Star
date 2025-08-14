@@ -4,33 +4,25 @@ CONTIENE TODAS LAS VARIABLES MODIFICABLES QUE PUEDAN SER NECESARIAS PARA LA EJEC
 module.exports = {
 	/*	FILL YOUR OWN DATA SECTION
 	*/
-	DOWNLOADS_FOLDER : '..\\media',
-	qrimagePath : '..\\media\\qr.png',
-	csvLogfilePath : '..\\logs\\logfile.csv',
+	cmdDelimiter: '@',
+	ollamaCmd: 'test',
+	mediaFolder : 'media',
+	qrimagePath : 'qr.png',
+	logsFolder: 'logs',
+	logFileName : 'logfile.csv',
 	//MAX Tokens per GPT response:
-	maxTokens : 500,
-	contextDelimiter : `Se breve, claro y amigable. Usa bullets, listas, analogías y lo necesario. `
-	+ `Usa un tono casual, tu publico son jovenes mexicanos. `
-	+ `Eres mi asesor personal para finanzas y economia, si la pregunta no es sobre esos temas, házmelo saber. Aquí está la pregunta:\n`,
-	/*
-	contextDelimiter : `Intenta responder en 200 palabras o menos como máximo si es posible. Si no te alcanza, házme saber que tienes un espacio limitado y mejor pregunte algo más específico.`
-	+ `Usa un tono casual. Tu publico es joven.\n`
-	+ `Importante: si la pregunta no es de finanzas o economia personal, dime que no puedes responderla. Aquí está la pregunta:\n`,
-	*/
-	/*
-	contextDelimiter : `Intenta responder en 200 palabras o menos como máximo si es posible. Si no te alcanza, házme saber que tienes un espacio limitado y mejor pregunte algo más específico.`
-	+ `Usa bullets, listas, analogías y lo que necesites. Usa un tono casual, se amable y neutral. Tu publico es joven.\n`
-	+ `Importante: si la pregunta no es de finanzas o economia personal, dime que no puedes responderla. Aquí está la pregunta:\n`,
-	*/
+	maxTokens : 200,
+	contextDelimiter : `Answer in at most 200 tokens (140 words). If the prompt's or question's nature doesn't allow it, let me know. `
+	+ `Be concise and give a short answer focused on the question. Usa un tono casual: `,
 	
 	/* DEFAULT AND HELP MESSAGE STRINGS
 	*/
 	helloCommandResponse : `*Hello!* I am C Star, an automated virtual assistant, also known as a chatbot.\n\n` +
 	`To interact with me, simply write one of these commands followed by what you want to know or find:\n\n` +
-	`- *!txt* SOMETHING\n  Receive an automatic written response about SOMETHING.\n\n` +
-	`- *!vid* SOMETHING\n  I will send you a link to a video related to SOMETHING.\n\n` +
-	`- *!img* SOMETHING\n  You will get an image about SOMETHING.\n\n` +
-	`- *!info* \n  This chatbot is part of my thesis project. If you are interested in learning more about why I created it, in Spanish, write *!info*.`,
+	`- *@txt* SOMETHING\n  Receive an automatic written response about SOMETHING.\n\n` +
+	`- *@vid* SOMETHING\n  I will send you a link to a video related to SOMETHING.\n\n` +
+	`- *@img* SOMETHING\n  You will get an image about SOMETHING.\n\n` +
+	`- *@info* \n  This chatbot is part of my thesis project. If you are interested in learning more about why I created it, in Spanish, write *!info*.`,
 
 	holaCommandResponse : `*¡Hola!* Estoy aquí para ayudarte.\n\n`
 	+ `Puedo responder tus preguntas, simplemente di mi nombre antes, por ejemplo:\n\n`
@@ -54,19 +46,17 @@ module.exports = {
 	`Este proyecto presenta una solución innovadora a este problema: el uso de un chatbot accesible a través de redes sociales. Este chatbot permite a los usuarios realizar consultas similares a las que harían en un navegador web y recibir respuestas a través de mensajes, reduciendo significativamente el consumo de datos. `
 	+ `Al operar dentro de las plataformas de mensajería, los usuarios pueden acceder a información vital sin incurrir en cargos adicionales de datos, haciendo que la búsqueda de conocimiento sea más asequible y accesible.\n\n` +
 	`Este enfoque no sólo promueve el derecho a la educación sino también democratiza el acceso a la información, permitiendo a más personas ejercer sus derechos humanos en un mundo cada vez más digital.`,
-	
 	noQueryVid : "En el silencio encontramos las respuestas más profundas, \n\n" +
 	"sin embargo, para descubrirlas, primero debemos formular la pregunta. \n\n" +
 	"Por favor, ingresa tu término de búsqueda después de '!vid' para que pueda proporcionarte el video que necesitas.",
-
 	noQueryImg : "En el silencio encontramos las respuestas más profundas, \n\n" +
 	"sin embargo, para descubrirlas, primero debemos formular la pregunta. \n\n" +
 	"Por favor, ingresa tu término de búsqueda después de '!img' para que pueda proporcionarte la imagen que necesitas.",
-
 	noQueryTxt : "En el silencio encontramos las respuestas más profundas, \n" +
 	"sin embargo, para descubrirlas, primero debemos formular la pregunta. \n\n" +
 	"Por favor, escribe tu duda después de *rico* para que pueda proporcionarte la respuesta que buscas.",
-
+	noQueryDrive : "Uso: @drive v=0.3 w=0.2 t=10 dt=0.05\nParámetros: v[m/s], w[rad/s], t[s], dt[s]",
+	genericError: "Algo salió mal y no pude resolver eso.",
 	writingYourAnswer : "Estoy pensando tu respuesta...",
 	drawingYourAnswer : "Dibujando tu respuesta. Esto tomará un minuto.",
 	canNotDrawAnswer : "Lo siento. No puedo dibujar esa imagen.",
