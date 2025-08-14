@@ -4,14 +4,16 @@
 	cualquier cosa que quiera probar. Es un nodo con información
 	temporal y que cambia constantemente.
 */
-
+const versionTag = '0.2.3';
+const path = require('path');
+const configConstants = require('../configs/config.js');
+const secrets = require('../configs/secrets.js');
+const { parseDriveArgs, handleDriveCommand } = require(path.resolve(__dirname, '..', 'scripts', 'driveHandler.js'));
+const { parseArmArgs, handleArmCommand } = require(path.resolve(__dirname, '..', 'scripts', 'armHandler.js'));
 /*	REQUIRED NODES SECTION
 	Do not modify this section.
 	No modifique este bloque de código.
 */
-const versionTag = '0.2.1';
-const configConstants = require('../configs/configv0.2.1.js');
-const secrets = require('../configs/secrets.js');
 const { MessageMedia } = require('whatsapp-web.js');
 const fetch = require('node-fetch');
 const qrterminal = require('qrcode-terminal');
@@ -20,11 +22,12 @@ const fs = require('fs');
 const fsp = fs.promises;
 const readline = require('readline');
 const fastcsv = require('fast-csv');
-const wwebVersion = '2.2412.54';
-const path = require('path');
-// Para distinguir mi ambiente de pruebas del .exe generado para dist.
+// Para distinguir entre ejecución mediante 'cmd node' y .exe.
 const isPkg = typeof process.pkg !== 'undefined';
 const basePath = isPkg ? process.cwd() : __dirname;
+const wwebVersion = '2.2412.54';
+
+const MODEL_URL = 'http://127.0.0.1:11434/api/generate';
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const client = new Client({
@@ -37,7 +40,9 @@ const client = new Client({
         type: 'remote',
         remotePath: `https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/${wwebVersion}.html`,
     },
-    authStrategy: new LocalAuth()
+    authStrategy: new LocalAuth({
+        dataPath: path.join(basePath, '.wwebjs_auth')
+    })
 });
 
 const startTime = new Date();
@@ -46,7 +51,6 @@ function removeAccents(str) {return str.normalize("NFD").replace(/[\u0300-\u036f
 
 /*	CONFIGURATIONS, CONSTANTS AND SECRETS IMPORT
 */
-
 // Load config into globals (assumes these objects exist)
 for (const [key, value] of Object.entries(configConstants)) global[key] = value;
 for (const [key, value] of Object.entries(secrets)) global[key] = value;
@@ -111,10 +115,12 @@ async function writeCommentToFile(comment) {
 /* 	STARTUP AND DIAGNOSIS SECTION
 */
 client.on('qr', async (qr) => {
-    console.log('QR event triggered');
-	qrterminal.generate(qr, {small: true});
-    await qrcode.toFile(qrimagePath, qr);
-    console.log(`QR code generated and saved as ${qrimagePath}. Scan it with your phone.`);
+  if (rl) { rl.pause(); process.stdout.write('\n'); }
+  console.log('QR event triggered');
+  qrterminal.generate(qr, { small: true });
+  await qrcode.toFile(qrimagePath, qr);
+  console.log(`QR saved: ${qrimagePath}`);
+  if (rl) { rl.resume(); rl.prompt(); }
 });
 client.on('auth_failure', msg => {
     console.error('Authentication failure', msg);
@@ -130,18 +136,23 @@ client.on('ready', () => {
 	//client.sendMessage(`Message: $authorizedIDs[0]`, message);
 });
 
-
 /*	SERVER CONSOLE COMMANDS SECTION
 */
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: '> '  // Prompt symbol. Changeable.
-});
-setImmediate(() => {
-    rl.prompt();
-});
-rl.on('line', async (input) => {
+let rl = null;
+function openConsole() {
+  if (rl) return rl;
+  rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: '> ' });
+  rl.on('line', onLine);
+  rl.prompt();
+  return rl;
+}
+function closeConsole() {
+  if (!rl) return;
+  rl.removeListener('line', onLine);
+  rl.close();
+  rl = null;
+}
+async function onLine(input) {
     switch(input.trim()) {
 		// CONSOLE COMMANDS GO HERE. Add more cases if needed.
         case 'broadcast':
@@ -155,6 +166,7 @@ rl.on('line', async (input) => {
 		case 'fetch':
 			await testFetch();
 			break;
+		case 'quit': closeConsole(); break;
         case 'listcontacts':
             try {
                 const contacts = await client.getContacts();
@@ -184,6 +196,9 @@ rl.on('line', async (input) => {
 		case 'ping':
 			functionCounts.pingCount++;
 			break;
+		case cmdDelimiter + ollamaCmd:
+			const response = await askModel("Qué dice mi color favorito de mí?");
+			console.log(response);
         default:
 			if (input.trim().startsWith('!img')) {
 				const searchTerm = input.trim().slice(5);
@@ -234,8 +249,7 @@ rl.on('line', async (input) => {
 			}
 		break;
     }
-    //rl.prompt();  // Prompt for next command
-});
+}
 
 /*	CHATBOT FETCHING SECTION
 */
@@ -266,8 +280,7 @@ const getOpenAIResponse = async (incomingMessage) => {
 		return 'I encountered an error. Please try again later.';
 	}
 };
-
-/*	Free GPT FETCHING SECTION
+/*	Free GPT FETCHING FUNCTION
 */
 /*
 const getFreeGpt = (query) => {
@@ -281,9 +294,27 @@ const getFreeGpt = (query) => {
                 reject(err);
             } else {
                 resolve(data.gpt);
-            }});});};
+}});});};
 */
-
+/* LOCAL MODEL FUNCTION
+*/ 
+async function askModel(prompt) {
+  const response = await fetch(MODEL_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'phi3',
+      prompt: contextDelimiter + prompt,
+      options: {
+        maxTo: maxTokens,
+        temperature: 0.7
+      },
+      stream: false
+    })
+  });
+  const data = await response.json();
+  return data;
+}
 const testFetch = async () => {
 	try {
 		const res = await fetch('https://jsonplaceholder.typicode.com/todos/1');
@@ -293,6 +324,7 @@ const testFetch = async () => {
 		console.error('❌ Fetch failed:', err.message || err);
 	}
 };
+//@drive
 
 /*	IMAGE FETCHING SECTION
 */
@@ -408,7 +440,6 @@ const getFreeGpt = (query) => {
     });
 };
 */
-
 /*	DALL-E FETCHING SECTION
 */
 const getDalleMedia = (query) => {
@@ -428,7 +459,6 @@ const getDalleMedia = (query) => {
         });
     });
 };
-
 const getDalleMiniMedia = (query) => {
     return new Promise((resolve, reject) => {
         dalle.mini({ prompt: query }, (err, data) => {
@@ -446,169 +476,169 @@ const getDalleMiniMedia = (query) => {
         });
     });
 };
-
-
-
-
-
 /*	MESSAGE RESPONSE HANDLING SECTION
 */
 client.on('message', async msg => {
-	//console.log(`Received message from ${msg.from}: ${msg.body}`);
-	/*
-		if (msg.body.toLowerCase().startsWith('!gpt')) {
-			const query = msg.body.slice(5).trim();
-			if (query.length > 0) {
-				// If there is a query, process it
-				try {
-					await client.sendMessage(msg.from, writingYourAnswer);
-					//console.log(`Received query: ${query}`);
-					const gptText = await getFreeGpt(query);
-					//console.log(`Received GPT: ${gptText}`);
-					await client.sendMessage(msg.from, gptText);
-					//console.log(`Answer sent to user.`);
-				} catch (error) {
-					console.error('Error fetching GPT response:', error);
-				}
-			} else {
-				// If there is no query, send the message about silence and asking questions
-				await client.sendMessage(msg.from, noQueryTxt);
-			}
-			functionCounts.txtCount++;
-		}
-		*/
-		/*	CHATBOT RESPONSE HANDLING
-		*/
-		if (msg.body.toLowerCase().startsWith('rico')) {
-			const query = msg.body.slice(5).trim();
-
-			if (query.length > 0) {
-				// If there is a query, process it
-				await client.sendMessage(msg.from, writingYourAnswer);
-				const replyText = await getOpenAIResponse(query);
-				await client.sendMessage(msg.from, replyText);
-			} else {
-				// If there is no query, send the message about silence and asking questions
-				await client.sendMessage(msg.from, noQueryTxt);
-			}
-			functionCounts.gptCount++;
-		}
-		/*	HELP AND INFO HANDLING
-		*/
-		else if (msg.body.toLowerCase().startsWith('!hello')) {
-			await client.sendMessage(msg.from, helloCommandResponse);
-			functionCounts.menuCount++;
-		}
-		else if (msg.body.toLowerCase().startsWith('!hola') || msg.body.toLowerCase().startsWith('hola')) {
-			await client.sendMessage(msg.from, holaCommandResponse);
-			functionCounts.menuCount++;
-		}
-		else if (msg.body.toLowerCase().startsWith('!ping')) {
-			rl.prompt();
-			await client.sendMessage(msg.from, pingSuccessful);
-			functionCounts.pingCount++;
-		}
-		else if (msg.body.toLowerCase().startsWith('!info')) {
-			await client.sendMessage(msg.from, infoCommandResponse);
-			functionCounts.infoCount++;
-		}
-		/*
-		else if (removeAccents(msg.body.toLowerCase()).startsWith('!buzon')) {
-			const comment = msg.body.slice(7).trim();
-			await writeCommentToFile(msg.from + ": " + comment);
-			await client.sendMessage(inboxAddress, comment);
-			await client.sendMessage(msg.from, boxCommandResponse);
-			functionCounts.boxCount++;
-		}
-		else if (msg.body.toLowerCase().startsWith('!img')) {
-			const addressee = msg.from;
-			const searchTerm = msg.body.slice(5).trim();
-			if (searchTerm.length > 0) {
-				try {
-					const firstImageSource = await getImageSource(searchTerm);
-					const imageMedia = await getImageMedia(firstImageSource);
-					const infoMessage = await getInfoMessage(firstImageSource);
-					// Sending message with the appropiate source reference first
-					await client.sendMessage(addressee, infoMessage);
-					// Sending media after
-					await client.sendMessage(addressee, imageMedia);
-				} catch (error) {
-					console.error('Error fetching or sending image:', error);
-					await client.sendMessage(msg.from, 'Sorry, I could not fetch an image for that term.');
-				}
-			} else {
-				// If there is no query, send the message about silence and asking questions
-				await client.sendMessage(msg.from, noQueryImg);
-			}
-			// Increment count for log
-			functionCounts.imgCount++;
-		}
-		else if (msg.body.toLowerCase().startsWith('!vid')) {
-			const searchTerm = msg.body.slice(5);
-			if (searchTerm.length > 0) {
-			// If there is a query, process it
-				try {
-					const firstVideoUrl = await getVideoSource(searchTerm);
-					await client.sendMessage(msg.from, `Video URL: ${firstVideoUrl}`);
-				} catch (error) {
-					console.error('Error fetching or sending video:', error.response ? error.response.data : error);
-					await client.sendMessage(msg.from, 'Sorry, I could not fetch a video for that term.');
-				}
-			} else {
-				// If there is no query, send the message about silence and asking questions
-				await client.sendMessage(msg.from, noQueryVid);
-			}
-			functionCounts.vidCount++;
-		}
-		else if (msg.body.toLowerCase().startsWith('!wiki')) {
-			let langCode = 'es'; // Default language code
-			let query;
-
-			if (msg.body[5] === ' ') { // Check if there's a space after !wiki
-				query = msg.body.slice(6).trim(); // If true, it's the default language
-			} else {
-				langCode = msg.body.substring(5, 7).toLowerCase(); // Extract the language code
-				query = msg.body.slice(7).trim(); // Extract the query
-			}
-			
-			if (query.length > 0) {
-				const wikiResponse = await getWikipediaResponse(query, langCode);
-				await client.sendMessage(msg.from, wikiResponse.text);
-				if (wikiResponse.url) {
-					await client.sendMessage(msg.from, "Fuente: " + wikiResponse.url);
-				}
-			} else {
-				await client.sendMessage(msg.from, "Please provide a search term after !wiki");
-			}
-			functionCounts.wikiCount++;
-		}
-		else if (msg.body.toLowerCase().startsWith('!dalle')) {
-			const query = msg.body.slice(7).trim();
+	const lowerBody = msg.body.toLowerCase();
+	console.log(`str = (${typeof lowerBody})`, lowerBody);
+	const greetings = [cmdDelimiter + 'hello', 'hi', 'hey', 'hello'];
+	
+	if (greetings.some(greet => lowerBody.startsWith(greet))) {
+		await client.sendMessage(msg.from, helloCommandResponse);
+		functionCounts.menuCount++;
+	}
+	else if (lowerBody.startsWith('@hola') || msg.body.toLowerCase().startsWith('hola')) {
+		await client.sendMessage(msg.from, holaCommandResponse);
+		functionCounts.menuCount++;
+	}
+	else if (lowerBody.startsWith('@ping')) {
+		await client.sendMessage(msg.from, pingSuccessful);
+		functionCounts.pingCount++;
+	}
+	else if (lowerBody.startsWith('@info')) {
+		await client.sendMessage(msg.from, infoCommandResponse);
+		functionCounts.infoCount++;
+	}
+	else if (removeAccents(lowerBody).startsWith('@buzon')) {
+		const comment = msg.body.slice(7).trim();
+		await writeCommentToFile(msg.from + ": " + comment);
+		await client.sendMessage(inboxAddress, comment);
+		await client.sendMessage(msg.from, boxCommandResponse);
+		functionCounts.boxCount++;
+	}
+	else if (lowerBody.startsWith('@img')) {
+		const addressee = msg.from;
+		const searchTerm = msg.body.slice(5).trim();
+		if (searchTerm.length > 0) {
 			try {
-				await client.sendMessage(msg.from, drawingYourAnswer);
-				const imageMedia = await getDalleMedia(query);
-				await client.sendMessage(msg.from, imageMedia);
+				const firstImageSource = await getImageSource(searchTerm);
+				const imageMedia = await getImageMedia(firstImageSource);
+				const infoMessage = await getInfoMessage(firstImageSource);
+				// Sending message with the appropiate source reference first
+				await client.sendMessage(addressee, infoMessage);
+				// Sending media after
+				await client.sendMessage(addressee, imageMedia);
 			} catch (error) {
-				console.error('Error fetching DALL·E media:', error);
-				await client.sendMessage(msg.from, canNotDrawAnswer);
+				console.error('Error fetching or sending image:', error);
+				await client.sendMessage(msg.from, 'Sorry, I could not fetch an image for that term.');
 			}
-			functionCounts.dalleCount++;
+		} else {
+			await client.sendMessage(msg.from, noQueryImg);
 		}
-		else if (msg.body.toLowerCase().startsWith('!pro')) {
-			const query = msg.body.slice(5).trim();
+		functionCounts.imgCount++;
+	}
+	else if (lowerBody.startsWith('@vid')) {
+		const searchTerm = msg.body.slice(5);
+		if (searchTerm.length > 0) {
 			try {
-				await client.sendMessage(msg.from, drawingYourAnswer);
-				const imageMedia = await getDalleMiniMedia(query);
-				await client.sendMessage(msg.from, imageMedia);
+				const firstVideoUrl = await getVideoSource(searchTerm);
+				await client.sendMessage(msg.from, `Video URL: ${firstVideoUrl}`);
 			} catch (error) {
-				console.error('Error fetching DALL·E media:', error);
-				await client.sendMessage(msg.from, canNotDrawAnswer);
+				console.error('Error fetching or sending video:', error.response ? error.response.data : error);
+				await client.sendMessage(msg.from, 'Sorry, I could not fetch a video for that term.');
 			}
-			functionCounts.dalleCount++;
+		} else {
+			await client.sendMessage(msg.from, noQueryVid);
 		}
-		*/
+		functionCounts.vidCount++;
+	}
+	else if (lowerBody.startsWith('@wiki')) {
+		let langCode = 'es'; // Default language code
+		let query;
+
+		if (msg.body[5] === ' ') { // Check if there's a space after !wiki
+			query = msg.body.slice(6).trim(); // If true, it's the default language
+		} else {
+			langCode = msg.body.substring(5, 7).toLowerCase(); // Extract the language code
+			query = msg.body.slice(7).trim(); // Extract the query
+		}
 		
-	//}
+		if (query.length > 0) {
+			const wikiResponse = await getWikipediaResponse(query, langCode);
+			await client.sendMessage(msg.from, wikiResponse.text);
+			if (wikiResponse.url) {
+				await client.sendMessage(msg.from, "Fuente: " + wikiResponse.url);
+			}
+		} else {
+			await client.sendMessage(msg.from, "Please provide a search term after !wiki");
+		}
+		functionCounts.wikiCount++;
+	}
+	else if (lowerBody.startsWith('@dalle')) {
+		const query = msg.body.slice(7).trim();
+		try {
+			await client.sendMessage(msg.from, drawingYourAnswer);
+			const imageMedia = await getDalleMedia(query);
+			await client.sendMessage(msg.from, imageMedia);
+		} catch (error) {
+			console.error('Error fetching DALL·E media:', error);
+			await client.sendMessage(msg.from, canNotDrawAnswer);
+		}
+		functionCounts.dalleCount++;
+	}
+	else if (lowerBody.startsWith('@drive')) {
+		const argsText = msg.body.slice('@drive'.length).trim();
+		if (!argsText) {
+			await client.sendMessage(msg.from, noQueryDrive);
+			return;
+		}
+		const parsed = parseDriveArgs(argsText);
+		if (!parsed.ok) {
+			// parámetros faltantes o mal formateados → mensaje de uso
+			await client.sendMessage(msg.from, noQueryDrive);
+			return;
+		}
+		try {
+			const { img, final_pose } = await handleDriveCommand(parsed.params);
+			const media = new MessageMedia('image/png', fs.readFileSync(img).toString('base64'), 'drive.png');
+			const [x, y, th] = final_pose.map(n => Number(n).toFixed(3));
+			await client.sendMessage(msg.from, media, { caption: `pose final: x=${x}, y=${y}, θ=${th} rad` });
+		} catch (e) {
+			console.error('drive failed:', e.code || '', e.message || e);
+			await client.sendMessage(msg.from, genericError);
+		}
+	}
+	else if (lowerBody.startsWith('@arm')) {
+		const argsText = msg.body.slice('@arm'.length).trim(); // posicional
+		const parsed = parseArmArgs(argsText);
+		if (!parsed.ok) {
+			await client.sendMessage(msg.from, noQueryArm || 'error');
+			return;
+		}
+		try {
+			const res = await handleArmCommand(parsed.params);
+			const media = new MessageMedia('image/png', fs.readFileSync(res.img).toString('base64'), 'arm.png');
+			const [x, y] = res.ee;
+			await client.sendMessage(msg.from, media, { caption: `ee: x=${x.toFixed(2)}, y=${y.toFixed(2)}` });
+		} catch (e) {
+			console.error('arm failed:', e.code || '', e.message || e);
+			await client.sendMessage(msg.from, genericError || 'error');
+		}
+	}
+	else if (lowerBody.startsWith('!pro')) {
+		const query = msg.body.slice(5).trim();
+		try {
+			await client.sendMessage(msg.from, drawingYourAnswer);
+			const imageMedia = await getDalleMiniMedia(query);
+			await client.sendMessage(msg.from, imageMedia);
+		} catch (error) {
+			console.error('Error fetching DALL·E media:', error);
+			await client.sendMessage(msg.from, canNotDrawAnswer);
+		}
+		functionCounts.dalleCount++;
+	}
+	else{
+		const query = msg.body;
+		console.log(`str = (${typeof query})`, query);
+		if (query.length > 1) {
+			await client.sendMessage(msg.from, writingYourAnswer);
+			const replyText = (await askModel(query)).response;
+			await client.sendMessage(msg.from, replyText);
+		} else {
+			await client.sendMessage(msg.from, noQueryTxt);
+		}
+		functionCounts.gptCount++;
+	}
 });
 
 /*	TAKEOFF
@@ -624,6 +654,8 @@ async function shutdown(signal) {
     process.exit(0);
 }
 
+process.on('unhandledRejection', (reason) => console.error('unhandledRejection:', reason));
+process.on('uncaughtException', (err) => console.error('uncaughtException:', err));
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGHUP', () => shutdown('SIGHUP'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));

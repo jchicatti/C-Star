@@ -6,7 +6,7 @@ src/chrome-win/
 src/.wwebjs_auth/
 src/qr.png
 testExecutable.bat
-
+db/
 buildExecutable.bat
 .DS_Store
 Thumbs.db
