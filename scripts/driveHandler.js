@@ -7,19 +7,28 @@ const os = require('os');
 // parser: exige v, w, t, dt presentes y numéricos
 function parseDriveArgs(argsText) {
   const out = {};
-  for (const tok of (argsText || '').split(/\s+/).filter(Boolean)) {
-    const m = tok.match(/^([a-zA-Z_]\w*)=([^\s]+)$/);
-    if (m) {
-      const k = m[1];
-      const raw = m[2];
-      const n = Number(raw);
-      out[k] = Number.isFinite(n) ? n : NaN; // forzamos numérico
-    }
+  const tokens = (argsText || '').trim().split(/\s+/).filter(Boolean);
+
+  // claves explícitas para evitar que la clave "se coma" dígitos (v0, dt5, etc.)
+  const keyRE = '(?:v|w|t|dt|x0|y0|th0)';
+  // número: +-, enteros/decimales, notación científica opcional
+  const numRE = '(?:[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?)';
+  // acepta con '=' (v=0.3) o pegado (v0.3)
+  const re = new RegExp(`^(${keyRE})\\s*(?:=\\s*)?(${numRE})$`, 'i');
+
+  for (const tok of tokens) {
+    const m = tok.match(re);
+    if (!m) continue;
+    const key = m[1].toLowerCase();
+    const val = Number(m[2]);
+    out[key] = val;
   }
+
   const required = ['v','w','t','dt'];
   const missing = required.filter(k => !(k in out));
-  const bad = Object.entries(out).filter(([k,v]) => (['v','w','t','dt','x0','y0','th0'].includes(k) && !Number.isFinite(v)))
-                                .map(([k]) => k);
+  const bad = Object.entries(out)
+    .filter(([k, v]) => !Number.isFinite(v))
+    .map(([k]) => k);
 
   if (missing.length || bad.length) {
     return { ok: false, reason: { missing, bad } };

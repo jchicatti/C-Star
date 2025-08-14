@@ -55,7 +55,8 @@ module.exports = {
 	noQueryTxt : "En el silencio encontramos las respuestas más profundas, \n" +
 	"sin embargo, para descubrirlas, primero debemos formular la pregunta. \n\n" +
 	"Por favor, escribe tu duda después de *rico* para que pueda proporcionarte la respuesta que buscas.",
-	noQueryDrive : "Uso: @drive v=0.3 w=0.2 t=10 dt=0.05\nParámetros: v[m/s], w[rad/s], t[s], dt[s]",
+	noQueryDrive : "Usos:\n@drive v=0.3 w=0.2 t=10 dt=0.05 ✅\n@drive v0.3 w0.2 t10 dt0.05 ✅\nParámetros: v[m/s], w[rad/s], t[s], dt[s]",
+	noQueryArm : "Uso: @arm n L1..Ln t1..tn [deg|rad]\nEjemplos:\n@arm 3 10 6 4 0 90 -45 ✅\n@arm 3 10 6 4 0 1.5708 -0.7854 rad ✅",
 	genericError: "Algo salió mal y no pude resolver eso.",
 	writingYourAnswer : "Estoy pensando tu respuesta...",
 	drawingYourAnswer : "Dibujando tu respuesta. Esto tomará un minuto.",

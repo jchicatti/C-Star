@@ -9,6 +9,7 @@ const path = require('path');
 const configConstants = require('../configs/config.js');
 const secrets = require('../configs/secrets.js');
 const { parseDriveArgs, handleDriveCommand } = require(path.resolve(__dirname, '..', 'scripts', 'driveHandler.js'));
+const { parseArmArgs, handleArmCommand } = require(path.resolve(__dirname, '..', 'scripts', 'armHandler.js'));
 /*	REQUIRED NODES SECTION
 	Do not modify this section.
 	No modifique este bloque de código.
@@ -114,10 +115,12 @@ async function writeCommentToFile(comment) {
 /* 	STARTUP AND DIAGNOSIS SECTION
 */
 client.on('qr', async (qr) => {
-    console.log('QR event triggered');
-	qrterminal.generate(qr, {small: true});
-    await qrcode.toFile(qrimagePath, qr);
-    console.log(`QR code generated and saved as ${qrimagePath}. Scan it with your phone.`);
+  if (rl) { rl.pause(); process.stdout.write('\n'); }
+  console.log('QR event triggered');
+  qrterminal.generate(qr, { small: true });
+  await qrcode.toFile(qrimagePath, qr);
+  console.log(`QR saved: ${qrimagePath}`);
+  if (rl) { rl.resume(); rl.prompt(); }
 });
 client.on('auth_failure', msg => {
     console.error('Authentication failure', msg);
@@ -135,15 +138,21 @@ client.on('ready', () => {
 
 /*	SERVER CONSOLE COMMANDS SECTION
 */
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: '> '  // Prompt symbol. Changeable.
-});
-setImmediate(() => {
-    rl.prompt();
-});
-rl.on('line', async (input) => {
+let rl = null;
+function openConsole() {
+  if (rl) return rl;
+  rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: '> ' });
+  rl.on('line', onLine);
+  rl.prompt();
+  return rl;
+}
+function closeConsole() {
+  if (!rl) return;
+  rl.removeListener('line', onLine);
+  rl.close();
+  rl = null;
+}
+async function onLine(input) {
     switch(input.trim()) {
 		// CONSOLE COMMANDS GO HERE. Add more cases if needed.
         case 'broadcast':
@@ -157,6 +166,7 @@ rl.on('line', async (input) => {
 		case 'fetch':
 			await testFetch();
 			break;
+		case 'quit': closeConsole(); break;
         case 'listcontacts':
             try {
                 const contacts = await client.getContacts();
@@ -239,8 +249,7 @@ rl.on('line', async (input) => {
 			}
 		break;
     }
-    //rl.prompt();  // Prompt for next command
-});
+}
 
 /*	CHATBOT FETCHING SECTION
 */
@@ -483,7 +492,6 @@ client.on('message', async msg => {
 		functionCounts.menuCount++;
 	}
 	else if (lowerBody.startsWith('@ping')) {
-		rl.prompt();
 		await client.sendMessage(msg.from, pingSuccessful);
 		functionCounts.pingCount++;
 	}
@@ -571,7 +579,7 @@ client.on('message', async msg => {
 	else if (lowerBody.startsWith('@drive')) {
 		const argsText = msg.body.slice('@drive'.length).trim();
 		if (!argsText) {
-			await client.sendMessage(msg.from, config.noQueryDrive);
+			await client.sendMessage(msg.from, noQueryDrive);
 			return;
 		}
 		const parsed = parseDriveArgs(argsText);
@@ -589,7 +597,24 @@ client.on('message', async msg => {
 			console.error('drive failed:', e.code || '', e.message || e);
 			await client.sendMessage(msg.from, genericError);
 		}
-}
+	}
+	else if (lowerBody.startsWith('@arm')) {
+		const argsText = msg.body.slice('@arm'.length).trim(); // posicional
+		const parsed = parseArmArgs(argsText);
+		if (!parsed.ok) {
+			await client.sendMessage(msg.from, noQueryArm || 'error');
+			return;
+		}
+		try {
+			const res = await handleArmCommand(parsed.params);
+			const media = new MessageMedia('image/png', fs.readFileSync(res.img).toString('base64'), 'arm.png');
+			const [x, y] = res.ee;
+			await client.sendMessage(msg.from, media, { caption: `ee: x=${x.toFixed(2)}, y=${y.toFixed(2)}` });
+		} catch (e) {
+			console.error('arm failed:', e.code || '', e.message || e);
+			await client.sendMessage(msg.from, genericError || 'error');
+		}
+	}
 	else if (lowerBody.startsWith('!pro')) {
 		const query = msg.body.slice(5).trim();
 		try {
