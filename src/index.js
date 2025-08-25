@@ -667,15 +667,14 @@ client.on('message', async msg => {
 		try {
 		const res = await handleScaraCommand(parsed.params);
 		const { l1,l2,t1,t2,z, units } = parsed.params;
-		const dz = z.toFixed(3);
 		const media = new MessageMedia('image/png', fs.readFileSync(res.img).toString('base64'), 'scara.png');
-		const { x, y, z, theta } = res.ee;
+		const { x, y, theta } = res.ee;
 		const angUnits = (res.units?.angles) || parsed.params.units;
 		await client.sendMessage(
 		  msg.from,
 		  media, { 
 		  // scara
-		  caption: `Cinemática directa de un robot SCARA (RRP). Con L1=${l1}, L2=${l2}, θ1=${t1}, θ2=${t2} y z=${dz}, el extremo del brazo quedó en (x=${x.toFixed(3)}, y=${y.toFixed(3)}, z=${z.toFixed(3)}), con orientación θ=${theta.toFixed(3)} rad. La vista superior muestra el alcance en el plano XY con la altura z anotada.`});
+		  caption: `Cinemática directa de un robot SCARA (RRP). Con L1=${l1}, L2=${l2}, θ1=${t1}, θ2=${t2} y z=${z}, el extremo del brazo quedó en (x=${x.toFixed(3)}, y=${y.toFixed(3)}, z=${z.toFixed(3)}), con orientación θ=${theta.toFixed(3)} rad. La vista superior muestra el alcance en el plano XY con la altura z anotada.`});
 		} catch (e) {
 		console.error('scara failed:', e.code || '', e.message || e);
 		const txt =
