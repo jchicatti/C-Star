@@ -11,6 +11,7 @@ const secrets = require('../configs/secrets.js');
 const { parseDriveArgs, handleDriveCommand } = require(path.resolve(__dirname, '..', 'scripts', 'driveHandler.js'));
 const { parseArmArgs, handleArmCommand } = require(path.resolve(__dirname, '..', 'scripts', 'armHandler.js'));
 const { parseIKArgs, handleIKCommand } =  require(path.resolve(__dirname, '..', 'scripts', 'ikHandler.js'));
+const { parseScaraArgs, handleScaraCommand } = require(path.resolve(__dirname, '..', 'scripts', 'scaraHandler.js'));
 /*	REQUIRED NODES SECTION
 	Do not modify this section.
 	No modifique este bloque de código.
@@ -593,7 +594,9 @@ client.on('message', async msg => {
 			const { img, final_pose } = await handleDriveCommand(parsed.params);
 			const media = new MessageMedia('image/png', fs.readFileSync(img).toString('base64'), 'drive.png');
 			const [x, y, th] = final_pose.map(n => Number(n).toFixed(3));
-			await client.sendMessage(msg.from, media, { caption: `pose final: x=${x}, y=${y}, θ=${th} rad` });
+			await client.sendMessage(msg.from, media,
+			//drive
+			{ caption: `Simulación del movimiento diferencial: la trayectoria azul muestra cómo avanzó el robot con v=${v} m/s y w=${w} rad/s durante t=${t} s. La pose final alcanzada fue (x=${x.toFixed(2)}, y=${y.toFixed(2)}, θ=${th.toFixed(2)} rad).`});
 		} catch (e) {
 			console.error('drive failed:', e.code || '', e.message || e);
 			await client.sendMessage(msg.from, genericError);
@@ -608,9 +611,12 @@ client.on('message', async msg => {
 		}
 		try {
 			const res = await handleArmCommand(parsed.params);
+			const { n } = parsed.params;
 			const media = new MessageMedia('image/png', fs.readFileSync(res.img).toString('base64'), 'arm.png');
 			const [x, y] = res.ee;
-			await client.sendMessage(msg.from, media, { caption: `ee: x=${x.toFixed(2)}, y=${y.toFixed(2)}` });
+			await client.sendMessage(msg.from, media, { 
+			// arm
+			caption: `Cinemática directa de un brazo con ${n} eslabones. El extremo del brazo (end effector) quedó en la posición (x=${x.toFixed(2)}, y=${y.toFixed(2)}). La imagen ilustra la cadena de eslabones desde el origen hasta la punta.`});
 		} catch (e) {
 			console.error('arm failed:', e.code || '', e.message || e);
 			await client.sendMessage(msg.from, genericError || 'error');
@@ -625,12 +631,15 @@ client.on('message', async msg => {
 		}
 		try {
 			const res = await handleIKCommand(parsed.params);
+			const { x, y, units: unitsIn } = parsed.params;
+			const units = res.units || unitsIn;
 			const media = new MessageMedia('image/png', fs.readFileSync(res.img).toString('base64'), 'ik2.png');
 			const s = res.solutions; // [[th1,th2],[th1b,th2b]]
-			const units = res.units || parsed.params.units;
-			const a = s[0].map(v => v.toFixed(3)).join(', ');
-			const b = s[1].map(v => v.toFixed(3)).join(', ');
-			await client.sendMessage(msg.from, media, { caption: `Soluciones (${units}):\n• codo arriba: ${a}\n• codo abajo: ${b}` });
+			const a = s[0].map(v => Number(v).toFixed(3)).join(', ');
+			const b = s[1].map(v => Number(v).toFixed(3)).join(', ');
+			await client.sendMessage(msg.from, media, { 
+			// ik
+			caption: `Cinemática inversa de un brazo de 2 eslabones. Para alcanzar el objetivo en (x=${x}, y=${y}), existen dos posturas posibles:\n• Codo arriba: ${a}\n• Codo abajo: ${b}\nLa figura muestra ambas configuraciones superpuestas para comparar.` });
 		} catch (e) {
 			console.error('ik failed:', e.code || '', e.message || e);
 			const txt =
@@ -640,6 +649,46 @@ client.on('message', async msg => {
 			await client.sendMessage(msg.from, txt);
 		}
 	}
+	else if (lowerBody.startsWith('@scara')) {
+		const argsText = msg.body.slice('@scara'.length).trim();
+		const parsed = parseScaraArgs(argsText);
+
+		if (!parsed.ok) {
+		const txt =
+		  parsed.reason === 'missing'      ? config.noQueryScara :
+		  parsed.reason === 'bad_numbers'  ? config.errScaraBadNumbers :
+		  parsed.reason === 'bad_lens'     ? config.errScaraLens :
+		  parsed.reason === 'bad_units'    ? config.errScaraUnits :
+		  config.noQueryScara;
+		await client.sendMessage(msg.from, txt);
+		return;
+		}
+
+		try {
+		const res = await handleScaraCommand(parsed.params);
+		const { l1,l2,t1,t2,z, units } = parsed.params;
+		const dz = z.toFixed(3);
+		const media = new MessageMedia('image/png', fs.readFileSync(res.img).toString('base64'), 'scara.png');
+		const { x, y, z, theta } = res.ee;
+		const angUnits = (res.units?.angles) || parsed.params.units;
+		await client.sendMessage(
+		  msg.from,
+		  media, { 
+		  // scara
+		  caption: `Cinemática directa de un robot SCARA (RRP). Con L1=${l1}, L2=${l2}, θ1=${t1}, θ2=${t2} y z=${dz}, el extremo del brazo quedó en (x=${x.toFixed(3)}, y=${y.toFixed(3)}, z=${z.toFixed(3)}), con orientación θ=${theta.toFixed(3)} rad. La vista superior muestra el alcance en el plano XY con la altura z anotada.`});
+		} catch (e) {
+		console.error('scara failed:', e.code || '', e.message || e);
+		const txt =
+		  e.code === 'EBADPARAMS_LENS'  ? errScaraLens :
+		  e.code === 'EBADPARAMS_UNITS' ? errScaraUnits :
+		  e.code === 'EBADJSON'         ? errScaraBadJSON :
+		  e.code === 'ESPAWN'           ? errScaraSpawn :
+		  e.code === 'ETIMEDOUT'        ? errScaraTimeout :
+		  config.genericError;
+		await client.sendMessage(msg.from, txt);
+		}
+	}
+	/*
 	else if (lowerBody.startsWith('!pro')) {
 		const query = msg.body.slice(5).trim();
 		try {
@@ -652,9 +701,10 @@ client.on('message', async msg => {
 		}
 		functionCounts.dalleCount++;
 	}
+	*/
 	else{
 		const query = msg.body;
-		console.log(`str = (${typeof query})`, query);
+		//console.log(`str = (${typeof query})`, query);
 		if (query.length > 1) {
 			await client.sendMessage(msg.from, writingYourAnswer);
 			const replyText = (await askModel(query)).response;
