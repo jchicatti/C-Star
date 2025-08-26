@@ -52,13 +52,21 @@ function handleIKCommand(params) {
     py.on('close', (code) => {
       clearTimeout(to);
       if (code !== 0) {
-        const e = new Error(err || `python exited ${code}`);
-        if (/EUNREACHABLE/i.test(err)) e.code = 'EUNREACHABLE';
-        else if (/EBADPARAMS/i.test(err)) e.code = 'EBADPARAMS';
-        else if (/EBADJSON/i.test(err))   e.code = 'EBADJSON';
-        else e.code = 'EPY';
-        return reject(e);
-      }
+	  const e = new Error(err || `python exited ${code}`);
+	  // EUNREACHABLE con datos (OUT vs IN)
+	  const mOut = /EUNREACHABLE:OUT\s+r=(\S+)\s+rmin=(\S+)\s+rmax=(\S+)\s+delta=(\S+)/i.exec(err || '');
+	  const mIn  = /EUNREACHABLE:IN\s+r=(\S+)\s+rmin=(\S+)\s+rmax=(\S+)\s+delta=(\S+)/i.exec(err || '');
+	  if (mOut) {
+		e.code = 'IK_UNREACH_OUT';
+		e.meta = { r: mOut[1], rmin: mOut[2], rmax: mOut[3], delta: mOut[4] };
+	  } else if (mIn) {
+		e.code = 'IK_UNREACH_IN';
+		e.meta = { r: mIn[1], rmin: mIn[2], rmax: mIn[3], delta: mIn[4] };
+	  } else if (/EBADPARAMS/i.test(err)) e.code = 'EBADPARAMS';
+	  else if (/EBADJSON/i.test(err))     e.code = 'EBADJSON';
+	  else e.code = 'EPY';
+	  return reject(e);
+	}
       try {
         resolve(JSON.parse(out));
       } catch (e) {

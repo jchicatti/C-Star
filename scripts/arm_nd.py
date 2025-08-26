@@ -27,8 +27,11 @@ def main():
         sys.stderr.write("EBADPARAMS: lengths and angles must have length n\n"); sys.exit(2)
     if any(L <= 0 for L in lengths):
         sys.stderr.write("EBADPARAMS: all lengths must be > 0\n"); sys.exit(2)
+    for i, L in enumerate(lengths, start=1):
+        if not isinstance(L, float) or L <= 0:
+            sys.stderr.write(f"EBADPARAMS:LENS_IDX i={i} val={L}\n"); sys.exit(2)
     if units not in ("deg","rad"):
-        sys.stderr.write("EBADPARAMS: units must be 'deg' or 'rad'\n"); sys.exit(2)
+        sys.stderr.write("EBADPARAMS:UNITS\n"); sys.exit(2)
 
     # a radianes si procede
     if units == "deg":

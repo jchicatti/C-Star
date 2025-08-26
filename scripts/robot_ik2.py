@@ -42,7 +42,17 @@ def main():
         out   = payload.get("out") or "ik2.png"
     except Exception as e:
         sys.stderr.write(f"EBADJSON: {e}\n"); sys.exit(2)
-
+    r = math.hypot(x, y)
+    rmax = l1 + l2
+    rmin = abs(l1 - l2)
+    if r > rmax + 1e-9:
+        delta = r - rmax
+        sys.stderr.write(f"EUNREACHABLE:OUT r={r:.6f} rmin={rmin:.6f} rmax={rmax:.6f} delta={delta:.6f}\n")
+        sys.exit(2)
+    if r < rmin - 1e-9:
+        delta = rmin - r
+        sys.stderr.write(f"EUNREACHABLE:IN r={r:.6f} rmin={rmin:.6f} rmax={rmax:.6f} delta={delta:.6f}\n")
+        sys.exit(2)
     if l1 <= 0 or l2 <= 0:
         sys.stderr.write("EBADPARAMS: l1,l2 must be > 0\n"); sys.exit(2)
     if units not in ("deg","rad"):
@@ -61,8 +71,9 @@ def main():
     plt.plot([j0[0],j1[0],j2[0]],[j0[1],j1[1],j2[1]], marker='o', linewidth=3, label='codo arriba')
     plt.plot([k0[0],k1[0],k2[0]],[k0[1],k1[1],k2[1]], marker='o', linewidth=3, label='codo abajo')
     plt.scatter([x],[y], marker='x')  # objetivo
-    r = l1 + l2; m = 0.1*r
-    plt.xlim(-r-m, r+m); plt.ylim(-r-m, r+m)
+    r_plot = rmax
+    m = 0.1*r_plot
+    plt.xlim(-r_plot-m, r_plot+m); plt.ylim(-r_plot-m, r_plot+m)
     plt.gca().set_aspect('equal', adjustable='box')
     plt.grid(True, alpha=0.3)
     plt.title("IK 2-DOF: codo arriba / codo abajo")

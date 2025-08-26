@@ -66,11 +66,13 @@ function handleArmCommand(params) {
     py.on('close', (code) => {
       clearTimeout(to);
       if (code !== 0) {
-        const e = new Error(err || `python exited ${code}`);
-        e.code = /EBADPARAMS/.test(err) ? 'EBADPARAMS'
-             : /EBADJSON/.test(err)   ? 'EBADJSON'
-             : 'EPY';
-        return reject(e);
+		const e = new Error(err || `python exited ${code}`);
+		const mLens = /EBADPARAMS:LENS_IDX\s+i=(\d+)\s+val=(\S+)/i.exec(err || '');
+		if (mLens) { e.code='ARM_BAD_L_AT'; e.meta={ i:mLens[1], val:mLens[2] }; }
+		else if (/EBADPARAMS:UNITS/i.test(err)) e.code='ARM_BAD_UNITS';
+		else if (/EBADJSON/i.test(err)) e.code='EBADJSON';
+		else e.code='EPY';
+		return reject(e);
       }
       try {
         resolve(JSON.parse(out));
