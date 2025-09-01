@@ -25,17 +25,25 @@ def main():
         sys.stderr.write("EBADPARAMS: n must be between 2 and 6\n"); sys.exit(2)
     if len(lengths) != n or len(angles) != n:
         sys.stderr.write("EBADPARAMS: lengths and angles must have length n\n"); sys.exit(2)
-    if any(L <= 0 for L in lengths):
-        sys.stderr.write("EBADPARAMS: all lengths must be > 0\n"); sys.exit(2)
+
+    # Longitudes con índice (evita mensaje genérico)
     for i, L in enumerate(lengths, start=1):
-        if not isinstance(L, float) or L <= 0:
+        try:
+            Lf = float(L)
+        except Exception:
             sys.stderr.write(f"EBADPARAMS:LENS_IDX i={i} val={L}\n"); sys.exit(2)
+        if Lf <= 0:
+            sys.stderr.write(f"EBADPARAMS:LENS_IDX i={i} val={Lf}\n"); sys.exit(2)
+
     if units not in ("deg","rad"):
         sys.stderr.write("EBADPARAMS:UNITS\n"); sys.exit(2)
 
     # a radianes si procede
     if units == "deg":
-        angles = [a*math.pi/180.0 for a in angles]
+        angles = [float(a)*math.pi/180.0 for a in angles]
+    else:
+        angles = [float(a) for a in angles]
+    lengths = [float(L) for L in lengths]
 
     # fk incremental
     x, y, th = 0.0, 0.0, 0.0
@@ -66,7 +74,9 @@ def main():
         "img": out,
         "ee": [xs[-1], ys[-1]],
         "joints": [[float(a), float(b)] for a,b in joints],
-        "params": {"n":n,"lengths":lengths,"angles":angles,"units":"rad" if units=="deg" else "rad"}
+        # reportamos unidades internas (rad)
+        "params": {"n":n,"lengths":lengths,"angles":angles,"units":"rad"}
     }))
+
 if __name__ == "__main__":
     main()

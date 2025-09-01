@@ -83,7 +83,9 @@ function formatDate(date) {
     const options = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' };
     return date.toLocaleDateString('en-US', options).replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$1-$2');
 }
-
+function template(str, obj = {}) {
+  return String(str).replace(/\{(\w+)\}/g, (_, k) => (k in obj ? obj[k] : `{${k}}`));
+}
 async function writeLogToFile() {
     // Check if all counts are zero
     const allZero = Object.values(functionCounts).every(count => count === 0);
@@ -483,6 +485,7 @@ const getDalleMiniMedia = (query) => {
 client.on('message', async msg => {
 	const lowerBody = msg.body.toLowerCase();
 	console.log(`str = (${typeof lowerBody})`, lowerBody);
+	/*
 	const greetings = [cmdDelimiter + 'hello', 'hi', 'hey', 'hello'];
 	
 	if (greetings.some(greet => lowerBody.startsWith(greet))) {
@@ -493,7 +496,8 @@ client.on('message', async msg => {
 		await client.sendMessage(msg.from, holaCommandResponse);
 		functionCounts.menuCount++;
 	}
-	else if (lowerBody.startsWith('@ping')) {
+	*/
+	if (lowerBody.startsWith('@ping')) {
 		await client.sendMessage(msg.from, pingSuccessful);
 		functionCounts.pingCount++;
 	}
@@ -580,26 +584,57 @@ client.on('message', async msg => {
 	}
 	else if (lowerBody.startsWith('@drive')) {
 		const argsText = msg.body.slice('@drive'.length).trim();
-		if (!argsText) {
-			await client.sendMessage(msg.from, noQueryDrive);
-			return;
-		}
+		if (!argsText) { await client.sendMessage(msg.from, noQueryDrive); return; }
+
 		const parsed = parseDriveArgs(argsText);
+
 		if (!parsed.ok) {
-			// parámetros faltantes o mal formateados → mensaje de uso
-			await client.sendMessage(msg.from, noQueryDrive);
-			return;
+		// DEBUG opcional
+		// console.log('parser fail:', parsed);
+
+		let msgText = noQueryDrive;
+		switch (parsed.reason) {
+		  case 'missing_key':
+			msgText = template(driveMissingKey, { k: parsed.k });
+			break;
+		  case 'nan':
+			msgText = template(driveNotNumeric, { k: parsed.k, val: parsed.val });
+			break;
+		  case 'bad_token':
+			msgText = template(driveBadToken, { tok: parsed.tok });
+			break;
+		  case 'bad_noeq_key':
+			msgText = template(driveBadNoEqKey, { tok: parsed.tok });
+			break;
+		  // 'missing' u otros → mensaje de uso genérico
 		}
+		await client.sendMessage(msg.from, msgText);
+		return;
+		}
+
 		try {
-			const { img, final_pose } = await handleDriveCommand(parsed.params);
-			const media = new MessageMedia('image/png', fs.readFileSync(img).toString('base64'), 'drive.png');
-			const [x, y, th] = final_pose.map(n => Number(n).toFixed(3));
-			await client.sendMessage(msg.from, media,
-			//drive
-			{ caption: `Simulación del movimiento diferencial: la trayectoria azul muestra cómo avanzó el robot con v=${v} m/s y w=${w} rad/s durante t=${t} s. La pose final alcanzada fue (x=${x.toFixed(2)}, y=${y.toFixed(2)}, θ=${th.toFixed(2)} rad).`});
+		const { img, final_pose } = await handleDriveCommand(parsed.params);
+		const media = new MessageMedia('image/png', fs.readFileSync(img).toString('base64'), 'drive.png');
+		const { v, w, t } = parsed.params;
+		const [xStr, yStr, thStr] = final_pose.map(n => Number(n).toFixed(3));
+		await client.sendMessage(msg.from, media, {
+		  caption:
+			`Simulación del movimiento diferencial: ` +
+			`la trayectoria azul muestra cómo avanzó el robot con v=${v} m/s y w=${w} rad/s durante t=${t} s. ` +
+			`Pose final: (x=${xStr}, y=${yStr}, θ=${thStr} rad).`
+		});
 		} catch (e) {
-			console.error('drive failed:', e.code || '', e.message || e);
-			await client.sendMessage(msg.from, genericError);
+		// opcional para depurar mapeo desde Python:
+		// console.error('drive error:', e.code, e.meta, e.message);
+
+		const msgText =
+		  e.code === 'DRIVE_TOO_MANY_STEPS' ? template(driveTooManySteps, e.meta) :
+		  e.code === 'DRIVE_BAD_T'          ? template(driveBadT, e.meta) :
+		  e.code === 'DRIVE_BAD_DT'         ? template(driveBadDt, e.meta) :
+		  e.code === 'DRIVE_NOMOTION'       ? driveNoMotion :
+		  e.code === 'EBADJSON'             ? errDriveBadJSON :
+		  noQueryDrive;
+		await client.sendMessage(msg.from, msgText);
 		}
 	}
 	else if (lowerBody.startsWith('@arm')) {
@@ -615,11 +650,15 @@ client.on('message', async msg => {
 			const media = new MessageMedia('image/png', fs.readFileSync(res.img).toString('base64'), 'arm.png');
 			const [x, y] = res.ee;
 			await client.sendMessage(msg.from, media, { 
-			// arm
 			caption: `Cinemática directa de un brazo con ${n} eslabones. El extremo del brazo (end effector) quedó en la posición (x=${x.toFixed(2)}, y=${y.toFixed(2)}). La imagen ilustra la cadena de eslabones desde el origen hasta la punta.`});
 		} catch (e) {
 			console.error('arm failed:', e.code || '', e.message || e);
-			await client.sendMessage(msg.from, genericError || 'error');
+			const txt =
+			e.code === 'ARM_BAD_L_AT' ? template(armBadLengthIdx, e.meta) :
+			e.code === 'ARM_BAD_UNITS'? armBadUnits :
+			e.code === 'EBADJSON'     ? errArmBadJSON :
+			noQueryArm;
+			await client.sendMessage(msg.from, txt);
 		}
 	}
 	else if (lowerBody.startsWith('@ik')) {
@@ -632,34 +671,38 @@ client.on('message', async msg => {
 		try {
 			const res = await handleIKCommand(parsed.params);
 			const { x, y, units: unitsIn } = parsed.params;
+			const xStr = Number(x).toFixed(2);
+			const yStr = Number(y).toFixed(2);
 			const units = res.units || unitsIn;
 			const media = new MessageMedia('image/png', fs.readFileSync(res.img).toString('base64'), 'ik2.png');
 			const s = res.solutions; // [[th1,th2],[th1b,th2b]]
 			const a = s[0].map(v => Number(v).toFixed(3)).join(', ');
 			const b = s[1].map(v => Number(v).toFixed(3)).join(', ');
 			await client.sendMessage(msg.from, media, { 
-			// ik
-			caption: `Cinemática inversa de un brazo de 2 eslabones. Para alcanzar el objetivo en (x=${x}, y=${y}), existen dos posturas posibles:\n• Codo arriba: ${a}\n• Codo abajo: ${b}\nLa figura muestra ambas configuraciones superpuestas para comparar.` });
+				caption: `Cinemática inversa de un brazo de 2 eslabones. Para alcanzar el objetivo en (x=${xStr}, y=${yStr}), existen dos posturas posibles en ${units}:\n• Codo arriba: ${a}\n• Codo abajo: ${b}\nLa figura muestra ambas configuraciones superpuestas para comparar.` });
 		} catch (e) {
-			console.error('ik failed:', e.code || '', e.message || e);
-			const txt =
-			e.code === 'EUNREACHABLE' ? (noIKReach) :
-			e.code === 'EBADPARAMS'   ? (noQueryIK) :
-			(genericError || 'Algo salió mal. Inténtalo más tarde.');
-			await client.sendMessage(msg.from, txt);
+			console.error('ik failed:', e.code || '', e.message || e, e.meta || '');
+			const msgText =
+			e.code === 'IK_UNREACH_OUT' ? template(ikUnreachOutside, e.meta) :
+			e.code === 'IK_UNREACH_IN'  ? template(ikUnreachInside,  e.meta) :
+			e.code === 'IK_BAD_LENGTHS' ? template(ikBadLengths,     e.meta) :
+			e.code === 'IK_BAD_UNITS'   ? template(ikBadUnits,       e.meta) :
+			e.code === 'EBADJSON'       ? errIKBadJSON :
+			// fallback genérico para otros EBADPARAMS
+			noQueryIK;
+			await client.sendMessage(msg.from, msgText);
 		}
 	}
 	else if (lowerBody.startsWith('@scara')) {
 		const argsText = msg.body.slice('@scara'.length).trim();
 		const parsed = parseScaraArgs(argsText);
-
 		if (!parsed.ok) {
 		const txt =
-		  parsed.reason === 'missing'      ? config.noQueryScara :
-		  parsed.reason === 'bad_numbers'  ? config.errScaraBadNumbers :
-		  parsed.reason === 'bad_lens'     ? config.errScaraLens :
-		  parsed.reason === 'bad_units'    ? config.errScaraUnits :
-		  config.noQueryScara;
+		  parsed.reason === 'missing'      ? noQueryScara :
+		  parsed.reason === 'bad_numbers'  ? errScaraBadNumbers :
+		  parsed.reason === 'bad_lens'     ? errScaraLens :
+		  parsed.reason === 'bad_units'    ? errScaraUnits :
+		  noQueryScara;
 		await client.sendMessage(msg.from, txt);
 		return;
 		}
@@ -683,7 +726,7 @@ client.on('message', async msg => {
 		  e.code === 'EBADJSON'         ? errScaraBadJSON :
 		  e.code === 'ESPAWN'           ? errScaraSpawn :
 		  e.code === 'ETIMEDOUT'        ? errScaraTimeout :
-		  config.genericError;
+		  genericError;
 		await client.sendMessage(msg.from, txt);
 		}
 	}
@@ -700,7 +743,7 @@ client.on('message', async msg => {
 		}
 		functionCounts.dalleCount++;
 	}
-	*/
+	
 	else{
 		const query = msg.body;
 		//console.log(`str = (${typeof query})`, query);
@@ -713,6 +756,7 @@ client.on('message', async msg => {
 		}
 		functionCounts.gptCount++;
 	}
+	*/
 });
 
 /*	TAKEOFF
