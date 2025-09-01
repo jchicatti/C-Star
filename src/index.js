@@ -32,9 +32,10 @@ const wwebVersion = '2.2412.54';
 const MODEL_URL = 'http://127.0.0.1:11434/api/generate';
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
+/*
 const client = new Client({
     puppeteer: {
-        executablePath: path.join(basePath, 'chrome-win', 'chrome.exe'),
+		executablePath: path.join(basePath, 'chrome-win', 'chrome.exe'),
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     },
@@ -46,7 +47,25 @@ const client = new Client({
         dataPath: path.join(basePath, '.wwebjs_auth')
     })
 });
-
+*/
+const client = new Client({
+  puppeteer: {
+    headless: false, // para ver qué pasa
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-zygote',
+      '--disable-extensions',
+    ],
+  },
+  // quita webVersionCache mientras depuras
+  authStrategy: new LocalAuth({ dataPath: path.join(basePath, '.wwebjs_auth') }),
+  takeoverOnConflict: true,
+  restartOnAuthFail: true,
+});
+console.log('Cliente creado, esperando inicializar...');
 const startTime = new Date();
 // Helper function to remove accents/diacritics from a string
 function removeAccents(str) {return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");}
@@ -139,7 +158,7 @@ client.on('ready', () => {
     //console.log(`Message: $authorizedIDs[0]` + message);
 	//client.sendMessage(`Message: $authorizedIDs[0]`, message);
 });
-
+client.on('authenticated', () => console.log('Autenticado correctamente.'));
 /*	SERVER CONSOLE COMMANDS SECTION
 */
 let rl = null;
@@ -762,6 +781,7 @@ client.on('message', async msg => {
 /*	TAKEOFF
 */
 client.initialize();
+console.log('Initialized.');
 
 /*	CLOSING AND CLEANUP
 */
