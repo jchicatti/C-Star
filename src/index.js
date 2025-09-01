@@ -12,6 +12,7 @@ const { parseDriveArgs, handleDriveCommand } = require(path.resolve(__dirname, '
 const { parseArmArgs, handleArmCommand } = require(path.resolve(__dirname, '..', 'scripts', 'armHandler.js'));
 const { parseIKArgs, handleIKCommand } =  require(path.resolve(__dirname, '..', 'scripts', 'ikHandler.js'));
 const { parseScaraArgs, handleScaraCommand } = require(path.resolve(__dirname, '..', 'scripts', 'scaraHandler.js'));
+const { parseLoopArgs, handleLoopCommand } = require(path.resolve(__dirname, '..', 'scripts', 'loopHandler.js'));
 /*	REQUIRED NODES SECTION
 	Do not modify this section.
 	No modifique este bloque de código.
