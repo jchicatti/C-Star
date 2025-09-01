@@ -730,6 +730,85 @@ client.on('message', async msg => {
 		await client.sendMessage(msg.from, txt);
 		}
 	}
+	// ...dentro de client.on('message', async (msg) => { ... })
+	else if (lowerBody.startsWith('@loop')) {
+		const argsText = msg.body.slice('@loop'.length).trim();
+
+		// caso: solo @loop
+		if (!argsText) {
+			await client.sendMessage(msg.from, noQueryLoopGeneral);
+			return;
+		}
+
+		const { parseLoopArgs, handleLoopCommand } = require('../scripts/loopHandler');
+		const parsed = parseLoopArgs(argsText);
+
+		// rutas rápidas de error de uso
+		if (!parsed.ok) {
+			if (parsed.reason === 'missing_all') {
+			  await client.sendMessage(msg.from, noQueryLoopGeneral);
+			} else if (parsed.reason === 'bad_mode') {
+			  await client.sendMessage(msg.from, noQueryLoopInvalid);
+			} else if (parsed.reason === 'missing_ref') {
+			  const m = parsed.mode;
+			  if (m === 'arm')   await client.sendMessage(msg.from, noQueryLoopArmShort);
+			  else if (m === 'drive') await client.sendMessage(msg.from, noQueryLoopDriveShort);
+			  else if (m === 'motor') await client.sendMessage(msg.from, noQueryLoopMotorShort);
+			  else await client.sendMessage(msg.from, noQueryLoopInvalid);
+			} else if (parsed.reason === 'bad_number') {
+			  await client.sendMessage(msg.from, loopBadNumber);
+			} else if (parsed.reason === 'bad_t') {
+			  await client.sendMessage(msg.from, loopBadT);
+			} else {
+			  await client.sendMessage(msg.from, noQueryLoopGeneral);
+			}
+			return;
+		}
+
+		try {
+			const res = await handleLoopCommand(parsed.params);
+			const { img, metrics } = res;
+			const media = new MessageMedia('image/png', fs.readFileSync(img).toString('base64'), `loop_${metrics.mode}.png`);
+
+			// formateo de números
+			const f2 = (v) => (v == null ? '—' : Number(v).toFixed(2));
+			const f3 = (v) => (v == null ? '—' : Number(v).toFixed(3));
+
+			// caption por modo
+			let caption = '';
+			if (metrics.mode === 'arm') {
+			  caption =
+				`Comparación lazo abierto vs cerrado (articulación).\n` +
+				`Abierto: θ_ss = K·Umax = ${f2(metrics.x_ss_open)} rad (θ_ref = ${f2(metrics.ref)}).\n` +
+				`Cerrado (PI): sigue θ_ref; ts ≈ ${f2(metrics.ts)} s; error final ≈ ${f2(metrics.x_final_closed - metrics.ref)} rad; ` +
+				`saturación ≈ ${f2(metrics.sat_time)} s.`;
+			} else if (metrics.mode === 'drive') {
+			  caption =
+				`Comparación lazo abierto vs cerrado (velocidad diferencial).\n` +
+				`Abierto: v_ss = K·Umax = ${f2(metrics.x_ss_open)} m/s (v_ref = ${f2(metrics.ref)}).\n` +
+				`Cerrado (PI): sigue v_ref; ts ≈ ${f2(metrics.ts)} s; error final ≈ ${f2(metrics.x_final_closed - metrics.ref)} m/s; ` +
+				`saturación ≈ ${f2(metrics.sat_time)} s.`;
+			} else {
+			  caption =
+				`Comparación lazo abierto vs cerrado (motor DC).\n` +
+				`Abierto: ω_ss = K·Umax = ${f2(metrics.x_ss_open)} rad/s (ω_ref = ${f2(metrics.ref)}).\n` +
+				`Cerrado (PI): sigue ω_ref; ts ≈ ${f2(metrics.ts)} s; error final ≈ ${f2(metrics.x_final_closed - metrics.ref)} rad/s; ` +
+				`saturación ≈ ${f2(metrics.sat_time)} s.`;
+			}
+
+			await client.sendMessage(msg.from, media, { caption });
+		} catch (e) {
+			console.error('loop failed:', e.code || '', e.message || e);
+			const txt =
+			  e.code === 'LOOP_TOO_MANY_STEPS' ? template(loopTooManySteps, e.meta) :
+			  e.code === 'LOOP_BAD_T'          ? loopBadT :
+			  e.code === 'LOOP_BAD_DT'         ? loopBadT :
+			  e.code === 'EBADPARAMS'          ? loopBadNumber :
+			  e.code === 'EBADJSON'            ? genericError :
+			  genericError;
+			await client.sendMessage(msg.from, txt);
+		}
+	}
 	/*
 	else if (lowerBody.startsWith('!pro')) {
 		const query = msg.body.slice(5).trim();
