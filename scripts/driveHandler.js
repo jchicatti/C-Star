@@ -6,33 +6,34 @@ const os = require('os');
 
 // parser: exige v, w, t, dt presentes y numéricos
 function parseDriveArgs(argsText) {
+  const toks = (argsText || '').trim().split(/\s+/).filter(Boolean);
+  if (!toks.length) return { ok: false, reason: 'missing' };
+
   const out = {};
-  const tokens = (argsText || '').trim().split(/\s+/).filter(Boolean);
+  const num = String.raw`-?(?:\d+\.?\d*|\.\d+)(?:e[+\-]?\d+)?`;
+  const reEq   = new RegExp(`^([a-zA-Z_][\\w]*)=(${num})$`, 'i');
+  const reNoEq = new RegExp(`^([a-zA-Z]+)(${num})$`, 'i');
+  const allowNoEq = new Set(['v','w','t','dt']);
 
-  // claves explícitas para evitar que la clave "se coma" dígitos (v0, dt5, etc.)
-  const keyRE = '(?:v|w|t|dt|x0|y0|th0)';
-  // número: +-, enteros/decimales, notación científica opcional
-  const numRE = '(?:[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?)';
-  // acepta con '=' (v=0.3) o pegado (v0.3)
-  const re = new RegExp(`^(${keyRE})\\s*(?:=\\s*)?(${numRE})$`, 'i');
-
-  for (const tok of tokens) {
-    const m = tok.match(re);
-    if (!m) continue;
-    const key = m[1].toLowerCase();
-    const val = Number(m[2]);
-    out[key] = val;
+  for (const tok of toks) {
+    let m = reEq.exec(tok);
+    if (!m) {
+      const m2 = reNoEq.exec(tok);
+      if (!m2) return { ok: false, reason: 'bad_token', tok };
+      const k2 = m2[1].toLowerCase();
+      if (!allowNoEq.has(k2)) return { ok: false, reason: 'bad_noeq_key', tok };
+      m = [tok, m2[1], m2[2]];
+    }
+    const k = m[1].toLowerCase();
+    const v = Number(m[2]);
+    if (!Number.isFinite(v)) return { ok: false, reason: 'nan', k, val: m[2] };
+    out[k] = v;
   }
+  for (const k of ['v','w','t','dt']) if (!(k in out)) return { ok: false, reason: 'missing_key', k };
+  out.x0  = ('x0'  in out) ? out.x0  : 0;
+  out.y0  = ('y0'  in out) ? out.y0  : 0;
+  out.th0 = ('th0' in out) ? out.th0 : 0;
 
-  const required = ['v','w','t','dt'];
-  const missing = required.filter(k => !(k in out));
-  const bad = Object.entries(out)
-    .filter(([k, v]) => !Number.isFinite(v))
-    .map(([k]) => k);
-
-  if (missing.length || bad.length) {
-    return { ok: false, reason: { missing, bad } };
-  }
   return { ok: true, params: out };
 }
 
@@ -69,10 +70,17 @@ function handleDriveCommand(params) {
       clearTimeout(to);
       if (code !== 0) {
         const e = new Error(err || `python exited ${code}`);
-        e.code = /EBADPARAMS/.test(err) ? 'EBADPARAMS'
-             : /EBADJSON/.test(err)   ? 'EBADJSON'
-             : 'EPY';
-        return reject(e);
+		const mSteps = /ETOO_MANY_STEPS\s+steps=(\d+)\s+t=(\S+)\s+dt=(\S+)/i.exec(err || '');
+		const mT = /EBADPARAMS:T_NONPOS\s+t=(\S+)/i.exec(err || '');
+		const mDt= /EBADPARAMS:DT_NONPOS\s+dt=(\S+)/i.exec(err || '');
+		if (mSteps) { e.code='DRIVE_TOO_MANY_STEPS'; e.meta={ steps:mSteps[1], t:mSteps[2], dt:mSteps[3] }; }
+		else if (mT) { e.code='DRIVE_BAD_T'; e.meta={ t:mT[1] }; }
+		else if (mDt){ e.code='DRIVE_BAD_DT'; e.meta={ dt:mDt[1] }; }
+		else if (/ENOMOTION/i.test(err)) e.code='DRIVE_NOMOTION';
+		else if (/EBADJSON/i.test(err))  e.code='EBADJSON';
+		else if (/EBADPARAMS/i.test(err))e.code='EBADPARAMS';
+		else e.code='EPY';
+		return reject(e);
       }
       try {
         const res = JSON.parse(out);

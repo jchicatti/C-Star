@@ -1,37 +1,36 @@
 // scripts/armHandler.js
 const { spawn } = require('child_process');
-const fs   = require('fs');
+const fs = require('fs');
 const path = require('path');
-const os   = require('os');
+const os = require('os');
 
-// -------- parsing & validation (posicional) --------
-// argsText: "N l1 .. lN t1 .. tN [deg|rad]"
+/** Parser: @arm n L1..Ln t1..tn [deg|rad]  (2<=n<=6)
+ *  - valida que haya suficientes números
+ *  - n fuera de rango y argumentos faltantes → noQueryArm (desde index)
+ *  - NO valida unidades ni longitudes (>0): eso lo hace Python para tener índice/valor
+ */
 function parseArmArgs(argsText) {
-  const toks = (argsText || '').trim().split(/[\s,;]+/).filter(Boolean);
-  if (toks.length < 1) return { ok: false, reason: 'missing_n' };
+  const toks = (argsText || '').trim().split(/\s+/).filter(Boolean);
+  if (toks.length < 1) return { ok: false, reason: 'missing' };
 
   const n = Number(toks[0]);
-  if (!Number.isFinite(n) || n % 1 !== 0 || n < 2 || n > 6) {
-    return { ok: false, reason: 'bad_n' };
-  }
-  const need = 1 + 2*n; // N + N lengths + N angles
-  if (toks.length < need) return { ok: false, reason: 'too_few_tokens' };
+  if (!Number.isInteger(n)) return { ok: false, reason: 'bad_n' };
+  if (n < 2 || n > 6) return { ok: false, reason: 'n_range', n };
 
-  const lengths = toks.slice(1, 1+n).map(Number);
-  const angles  = toks.slice(1+n, 1+2*n).map(Number);
-  const units   = (toks[need] || 'deg').toLowerCase();
+  // necesitamos 1 (n) + n (L) + n (ang) = 1+2n, más opcional units
+  if (toks.length < 1 + 2*n) return { ok: false, reason: 'missing_args' };
 
-  const goodLengths = lengths.length === n && lengths.every(x => Number.isFinite(x) && x > 0);
-  const goodAngles  = angles.length  === n && angles.every(x => Number.isFinite(x));
-  const unitsOk     = ['deg','rad'].includes(units);
+  const lens = toks.slice(1, 1+n).map(Number);
+  const angs = toks.slice(1+n, 1+2*n).map(Number);
 
-  if (!goodLengths || !goodAngles || !unitsOk) {
-    return { ok: false, reason: 'bad_params' };
-  }
-  return { ok: true, params: { n, lengths, angles, units } };
+  if (lens.some(x => !Number.isFinite(x))) return { ok: false, reason: 'bad_number_lengths' };
+  if (angs.some(x => !Number.isFinite(x))) return { ok: false, reason: 'bad_number_angles' };
+
+  const units = (toks[1+2*n] || 'deg').toLowerCase(); // lo validará Python
+
+  return { ok: true, params: { n, lengths: lens, angles: angs, units } };
 }
 
-// -------- runner (puro, sin side-effects de WhatsApp) --------
 function resolvePyScript() {
   const bundled = path.join(__dirname, 'arm_nd.py');
   if (process.pkg) {
@@ -42,17 +41,13 @@ function resolvePyScript() {
   return bundled;
 }
 
-/**
- * ejecuta arm_nd.py con { n, lengths, angles, units } y devuelve:
- * { img, ee:[x,y], joints:[[x0,y0],...,[xN,yN]], params }
- */
 function handleArmCommand(params) {
-  const outPng  = path.join(os.tmpdir(), `arm_${Date.now()}.png`);
+  const outPng = path.join(os.tmpdir(), `arm_${Date.now()}.png`);
   const payload = { ...params, out: outPng };
   const pyScript = resolvePyScript();
 
   return new Promise((resolve, reject) => {
-    const py = spawn('python3', [pyScript], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const py = spawn('python3', [pyScript], { stdio: ['pipe','pipe','pipe'] });
 
     const CAP = 1_000_000;
     let out = '', err = '';
@@ -66,14 +61,27 @@ function handleArmCommand(params) {
     py.on('close', (code) => {
       clearTimeout(to);
       if (code !== 0) {
-        const e = new Error(err || `python exited ${code}`);
-        e.code = /EBADPARAMS/.test(err) ? 'EBADPARAMS'
-             : /EBADJSON/.test(err)   ? 'EBADJSON'
-             : 'EPY';
+        const first = String(err || '').split(/\r?\n/).map(s=>s.trim()).find(Boolean) || '';
+        const e = new Error(first || `python exited ${code}`);
+
+        // Específicos primero
+        const mIdx = /EBADPARAMS:LENS_IDX\s+i=(\d+)\s+val=(\S+)/i.exec(first);
+        const mUnits = /EBADPARAMS:UNITS/i.test(first);
+        const mBadJSON = /EBADJSON/i.test(first);
+        const mBadParams = /EBADPARAMS/i.test(first);
+
+        if (mIdx) { e.code = 'ARM_BAD_L_AT'; e.meta = { i: mIdx[1], val: mIdx[2] }; }
+        else if (mUnits) { e.code = 'ARM_BAD_UNITS'; }
+        else if (mBadJSON) { e.code = 'EBADJSON'; }
+        else if (mBadParams) { e.code = 'EBADPARAMS'; }
+        else { e.code = 'EPY'; }
+
         return reject(e);
       }
+
       try {
-        resolve(JSON.parse(out));
+        const res = JSON.parse(out); // { img, ee:[x,y], joints:[...], params:{...} }
+        resolve(res);
       } catch (e) {
         reject(Object.assign(e, { code: 'EBADJSON' }));
       }

@@ -38,8 +38,16 @@ def main():
     y0  = as_float("y0", 0.0)
     th0 = as_float("th0", 0.0)
 
-    if t <= 0 or dt <= 0:
-        sys.stderr.write("EBADPARAMS: t>0 and dt>0 required\n"); sys.exit(2)
+    if t <= 0:
+        sys.stderr.write(f"EBADPARAMS:T_NONPOS t={t}\n"); sys.exit(2)
+    if dt <= 0:
+        sys.stderr.write(f"EBADPARAMS:DT_NONPOS dt={dt}\n"); sys.exit(2)
+
+    steps = int(math.ceil(t/dt))
+    if steps > 2000:
+        sys.stderr.write(f"ETOO_MANY_STEPS steps={steps} t={t} dt={dt}\n"); sys.exit(2)
+    if abs(v) < 1e-12 and abs(w) < 1e-12:
+        sys.stderr.write("ENOMOTION v=0 w=0\n"); sys.exit(2)
 
     out = params.get("out") or "drive_out.png"
 
