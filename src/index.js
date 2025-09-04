@@ -133,13 +133,11 @@ client.on('auth_failure', msg => {
 client.on('disconnected', (reason) => {
     console.log('Phone is disconnected!', reason);
 });
-client.on('ready', () => {
-    console.log('Client is ready!');
-    //let message = 'Array test. You are now talking to GPT 3.5 Turbo -J.D. Chicatti';
-    //client.sendMessage(`${number}@c.us`, message);
-    //console.log(`Message: $authorizedIDs[0]` + message);
-	//client.sendMessage(`Message: $authorizedIDs[0]`, message);
-});
+client.on('change_state', s => console.log('[change_state]', s));
+const iv = setInterval(async () => {
+  try { console.log('state:', await client.getState()); } catch {}
+}, 3000);
+client.on('ready', () => { console.log('[ready]'); clearInterval(iv); });
 
 /*	SERVER CONSOLE COMMANDS SECTION
 */
