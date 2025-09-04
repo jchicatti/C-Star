@@ -4,36 +4,39 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 
-// --- parser: @loop <mode> <ref> [t] ---
+// Parser posicional: @loop <mode> <ref> [t Umax K tau Kp Ki Kd]
 function parseLoopArgs(argsText) {
   const toks = (argsText || '').trim().split(/\s+/).filter(Boolean);
-  if (!toks.length) return { ok: false, reason: 'missing_all' };
+  if (toks.length < 1) return { ok: false, reason: 'missing_all' };
 
   const mode = (toks[0] || '').toLowerCase();
   if (!['arm','drive','motor'].includes(mode)) {
-    // si el primer token no es un modo, es inválido
     return { ok: false, reason: 'bad_mode', mode };
   }
   if (toks.length < 2) {
-    // falta referencia
     return { ok: false, reason: 'missing_ref', mode };
   }
-  const ref = Number(toks[1]);
-  if (!Number.isFinite(ref)) {
+
+  const nums = toks.slice(1).map(s => Number(s));
+  // al menos el primero (ref) numérico
+  if (!Number.isFinite(nums[0])) {
     return { ok: false, reason: 'bad_number', mode, bad: toks[1] };
   }
 
-  let t = undefined;
-  if (toks.length >= 3) {
-    t = Number(toks[2]);
-    if (!Number.isFinite(t)) {
-      return { ok: false, reason: 'bad_t', mode, bad: toks[2] };
-    }
+  // mapea posicionales si existen
+  const [ref, t, Umax, K, tau, Kp, Ki, Kd] = nums;
+
+  // valida numéricos si fueron provistos
+  const checkNum = (v) => (v === undefined || Number.isFinite(v));
+  if (!checkNum(t) || !checkNum(Umax) || !checkNum(K) || !checkNum(tau) ||
+      !checkNum(Kp) || !checkNum(Ki) || !checkNum(Kd)) {
+    return { ok: false, reason: 'bad_number', mode };
   }
-  return { ok: true, params: { mode, ref, t } };
+
+  return { ok: true, params: { mode, ref, t, Umax, K, tau, Kp, Ki, Kd } };
 }
 
-// --- resolver ruta del .py (pkg friendly) ---
+// Resuelve ruta del .py (compatible con pkg)
 function resolvePyScript() {
   const bundled = path.join(__dirname, 'loop_first_order.py');
   if (process.pkg) {
@@ -44,7 +47,7 @@ function resolvePyScript() {
   return bundled;
 }
 
-// --- ejecutor: corre python y mapea errores a códigos consistentes ---
+// Ejecuta el .py y retorna { img, metrics }
 function handleLoopCommand(params) {
   const outPng = path.join(os.tmpdir(), `loop_${params.mode}_${Date.now()}.png`);
   const payload = { ...params, out: outPng };
@@ -53,7 +56,7 @@ function handleLoopCommand(params) {
   return new Promise((resolve, reject) => {
     const py = spawn('python3', [pyScript], { stdio: ['pipe','pipe','pipe'] });
 
-    const CAP = 1_000_000;
+    const CAP = 1_000_000; // 1MB
     let out = '', err = '';
     py.stdout.on('data', d => { if (out.length < CAP) out += d; });
     py.stderr.on('data', d => { if (err.length < CAP) err += d; });
@@ -71,19 +74,19 @@ function handleLoopCommand(params) {
         const mDt    = /EBADPARAMS:DT_NONPOS\s+dt=(\S+)/i.exec(err || '');
         const mMode  = /EBADPARAMS:MODE/i.test(err || '');
         const mRef   = /EBADPARAMS:REF/i.test(err || '');
-        const mTnn   = /EBADPARAMS:T_NONNUMERIC/i.test(err || '');
+        const mJson  = /EBADJSON/i.test(err || '');
 
         if (mSteps) { e.code='LOOP_TOO_MANY_STEPS'; e.meta={ steps:mSteps[1], t:mSteps[2], dt:mSteps[3] }; }
         else if (mT) { e.code='LOOP_BAD_T'; e.meta={ t:mT[1] }; }
         else if (mDt){ e.code='LOOP_BAD_DT'; e.meta={ dt:mDt[1] }; }
-        else if (mMode){ e.code='EBADPARAMS'; }
-        else if (mRef || mTnn){ e.code='EBADPARAMS'; }
-        else if (/EBADJSON/i.test(err)) { e.code='EBADJSON'; }
-        else if (/EPY_MPL/i.test(err))  { e.code='EPY'; }
+        else if (mMode || mRef){ e.code='EBADPARAMS'; }
+        else if (mJson){ e.code='EBADJSON'; }
+        else if (/EPY_MPL/i.test(err)) { e.code='EPY'; }
         else if (/EBADPARAMS/i.test(err)) { e.code='EBADPARAMS'; }
         else { e.code='EPY'; }
         return reject(e);
       }
+
       try {
         const res = JSON.parse(out); // { img, metrics }
         resolve(res);

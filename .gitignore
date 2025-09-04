@@ -3,6 +3,7 @@ secrets.js
 media/
 dist/*
 src/chrome-win/
+src/.wwebjs_cache/
 src/.wwebjs_auth/
 src/qr.png
 testExecutable.bat
