@@ -16,15 +16,15 @@ module.exports = {
 	
 	/* DEFAULT AND HELP MESSAGE STRINGS
 	*/
-	helloCommandResponse : `*Hello!* I am C Star, an automated virtual assistant, also known as a chatbot.\n\n` +
-	`To interact with me, simply write one of these commands followed by what you want to know or find:\n\n` +
-	`- *@txt* SOMETHING\n  Receive an automatic written response about SOMETHING.\n\n` +
-	`- *@vid* SOMETHING\n  I will send you a link to a video related to SOMETHING.\n\n` +
-	`- *@img* SOMETHING\n  You will get an image about SOMETHING.\n\n` +
-	`- *@info* \n  This chatbot is part of my thesis project. If you are interested in learning more about why I created it, in Spanish, write *!info*.`,
-
+	helloCommandResponse : `*Hello!* I'm here to help you.\n\n` +
+	`Available general purpose commands: @vid, @img, @dalle, @wiki\n` +
+	`Mini mechatronic ecosystem: @drive, @arm, @ik, @scara, @loop, @step\n`+
+	`Or simply ask away.`,
 	holaCommandResponse : `*¡Hola!* Estoy aquí para ayudarte.\n\n` +
-	`Comandos para Jose Guadalupe: @drive, @ik, @arm, o solo pregúntame algo.`,
+	`Comandos de uso general disponibles: @vid, @img, @dalle, @wiki\n`+
+	`Mini-ecosistema mecatrónico: @drive, @arm, @ik, @scara, @loop, @step\n`+
+	`O simplemente hazme una pregunta.`,
+	
 	infoCommandResponse : `AHORRA DATOS NAVEGANDO EN WHATSAPP Y USA GPT-4 GRATIS.\n\n` +
 	`Este proyecto busca abordar el desafío del acceso a la educación a través del Internet, entendiendo que tanto la educación como el acceso a Internet son derechos humanos fundamentales.\n\n` +
 	`Organismos internacionales, incluida la ONU, han reconocido el acceso a Internet como un derecho humano esencial que debe ser garantizado con calidad y asequibilidad: es un derecho que facilita otros derechos como la educación, la asociación y la privacidad.\n\n` +
@@ -74,4 +74,30 @@ module.exports = {
 	errScaraBadJSON:    "Error interno al procesar datos (JSON) ❌",
 	errScaraSpawn:      "No se pudo lanzar Python en el sistema ❌",
 	errScaraTimeout:    "El cálculo de SCARA tardó demasiado y fue cancelado ⏱️",
+	noQueryLoopArm : "Uso: @loop arm θref [t]\n\nEste comando muestra la diferencia entre lazo abierto y lazo cerrado para una articulación de robot.\nEn lazo abierto, el motor recibe un esfuerzo constante y raramente alcanza el ángulo pedido.\nEn lazo cerrado (control PI), se mide el ángulo y se corrige hasta alcanzar θref.\nAsí se relaciona con @arm: en lugar de solo calcular la posición final de un brazo, aquí se ve cómo el control influye en si realmente se llega a la referencia.\n\nEjemplos:\n@loop arm 1.57 ✅\n@loop arm 1.57 10 ✅",
+	noQueryLoopDrive : "Uso: @loop drive vref [t]\n\nEste comando compara lazo abierto vs lazo cerrado en la velocidad de un robot diferencial.\nEn lazo abierto, el robot recibe un voltaje constante y se estabiliza en una velocidad que no siempre coincide con la deseada.\nEn lazo cerrado (control PI), la velocidad medida se compara con vref y se ajusta hasta coincidir.\nAsí se relaciona con @drive: en lugar de solo simular trayectorias ideales, aquí se observa cómo la retroalimentación corrige la velocidad.\n\nEjemplos:\n@loop drive 0.8 ✅\n@loop drive 0.8 12 ✅",
+	noQueryLoopMotor : "Uso: @loop motor wref [t]\n\nEste comando enseña la diferencia entre lazo abierto y cerrado en un motor DC.\nEn lazo abierto, se aplica siempre el voltaje máximo y la velocidad final depende del motor, no de la consigna.\nEn lazo cerrado (control PI), el sistema mide la velocidad real y ajusta el voltaje hasta alcanzar wref.\nAsí se relaciona con los demás comandos (@arm, @ik, @drive): complementa la cinemática con un principio de control elemental.\n\nEjemplos:\n@loop motor 10 ✅\n@loop motor 15 12 ✅",
+	noQueryLoopGeneral : "@loop compara dos formas de accionar un sistema real:\n• lazo abierto: aplicas un mando fijo y ves hasta dónde llega por sí solo.\n• lazo cerrado: mides la salida y corriges con un controlador (PI/PID) para alcanzar una referencia.\n\nQué simula y qué verás:\n- Curva 1 (abierto): línea horizontal en el valor de equilibrio sin feedback.\n- Curva 2 (cerrado): cómo la salida persigue la referencia en el tiempo.\n\nCómo usarlo (sin nombres, en orden):\n@loop arm θref [t Umax K τ Kp Ki Kd]\n@loop drive vref [t Umax K τ Kp Ki Kd]\n@loop motor wref [t Umax K τ Kp Ki Kd]\nSolo θref/vref/wref es obligatorio. Lo demás es opcional.\n\nEjemplos:\n@loop arm 1.57 ✅\n@loop motor 10 8 5 1 0.5 1.0 0.4 ✅",
+	noQueryLoopInvalid : "Modo inválido. Usa: @loop arm θref [t] | @loop drive vref [t] | @loop motor wref [t]\n\nEjemplo válido:\n@loop arm 1.57 ✅",
+	noQueryLoopArmShort : "Falta el valor de referencia (θref).\nUso: @loop arm θref [t]\nEjemplo: @loop arm 1.57 ✅",
+	noQueryLoopDriveShort : "Falta el valor de referencia (vref).\nUso: @loop drive vref [t]\nEjemplo: @loop drive 0.8 ✅",
+	noQueryLoopMotorShort : "Falta el valor de referencia (wref).\nUso: @loop motor wref [t]\nEjemplo: @loop motor 10 ✅",
+	loopBadT : "La duración de la simulación (t) debe ser mayor que 0 s. Ejemplo: @loop arm 1.57 6 ✅",
+	loopBadNumber : "El valor debe ser numérico. Ejemplo: @loop drive 0.8 ✅",
+	loopTooManySteps : "Simulación demasiado larga (pasos=${steps}, t=${t}, dt=${dt}). Reduce el tiempo o usa un dt mayor.",
+	noQueryStep : "@step grafica la respuesta al escalón de un sistema de segundo orden con PID (planta canónica). " +
+	"Sirve para observar sobreimpulso, amortiguamiento y tiempo de establecimiento sin Matlab.\n\n" +
+	"Uso: @step [A] [Kp Ki Kd] [t]\n" +
+	"Ejemplos:\n" +
+	"@step 1 ✅\n" +
+	"@step 1 1.2 0 0.2 ✅\n" +
+	"@step 1 1.0 0.5 0.1 10 ✅\n" +
+	"tip: si ves una respuesta muy lenta, aumenta Kp o t; si hay mucho sobreimpulso, sube Kd; si queda error final, agrega Ki.",
+	stepBadNumber   : "Los parámetros deben ser numéricos. Ejemplos: @step 1  |  @step 1 1.2 0 0.2",
+	stepBadT        : "La duración t debe ser > 0 s. Ejemplo: @step 1 1.0 0 0 8",
+	stepBadZeta     : "El amortiguamiento ζ debe ser ≥ 0. Ejemplo: @step 1 1 0 0 8 0.5",
+	stepBadWn       : "La frecuencia natural ωₙ debe ser > 0 rad/s. Ejemplo: @step 1 1 0 0 8 0.5 2.0",
+	errStepBadJSON  : "Hubo un problema leyendo parámetros. Intenta de nuevo con números simples (p. ej., @step 1 1.2 0 0.2).",
+	stepGenericError: "No pude simular @step. Revisa el formato o intenta con valores más sencillos.",
+	stepTooManySteps : "La simulación genera demasiados pasos (≈${steps}). Reduce t=${t} s o aumenta dt=${dt} s (p. ej., dt=0.02)."
 };

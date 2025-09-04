@@ -12,6 +12,8 @@ const { parseDriveArgs, handleDriveCommand } = require(path.resolve(__dirname, '
 const { parseArmArgs, handleArmCommand } = require(path.resolve(__dirname, '..', 'scripts', 'armHandler.js'));
 const { parseIKArgs, handleIKCommand } =  require(path.resolve(__dirname, '..', 'scripts', 'ikHandler.js'));
 const { parseScaraArgs, handleScaraCommand } = require(path.resolve(__dirname, '..', 'scripts', 'scaraHandler.js'));
+const { parseLoopArgs, handleLoopCommand } = require(path.resolve(__dirname, '..', 'scripts', 'loopHandler.js'));
+const { parseStepArgs, handleStepCommand } = require(path.resolve(__dirname, '..', 'scripts','stepHandler.js'));
 /*	REQUIRED NODES SECTION
 	Do not modify this section.
 	No modifique este bloque de código.
@@ -28,26 +30,9 @@ const fastcsv = require('fast-csv');
 const isPkg = typeof process.pkg !== 'undefined';
 const basePath = isPkg ? process.cwd() : __dirname;
 const wwebVersion = '2.2412.54';
-
 const MODEL_URL = 'http://127.0.0.1:11434/api/generate';
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
-/*
-const client = new Client({
-    puppeteer: {
-		executablePath: path.join(basePath, 'chrome-win', 'chrome.exe'),
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    },
-    webVersionCache: {
-        type: 'remote',
-        remotePath: `https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/${wwebVersion}.html`,
-    },
-    authStrategy: new LocalAuth({
-        dataPath: path.join(basePath, '.wwebjs_auth')
-    })
-});
-*/
 const client = new Client({
   puppeteer: {
     headless: false, // para ver qué pasa
@@ -151,14 +136,12 @@ client.on('auth_failure', msg => {
 client.on('disconnected', (reason) => {
     console.log('Phone is disconnected!', reason);
 });
-client.on('ready', () => {
-    console.log('Client is ready!');
-    //let message = 'Array test. You are now talking to GPT 3.5 Turbo -J.D. Chicatti';
-    //client.sendMessage(`${number}@c.us`, message);
-    //console.log(`Message: $authorizedIDs[0]` + message);
-	//client.sendMessage(`Message: $authorizedIDs[0]`, message);
-});
-client.on('authenticated', () => console.log('Autenticado correctamente.'));
+client.on('change_state', s => console.log('[change_state]', s));
+const iv = setInterval(async () => {
+  try { console.log('state:', await client.getState()); } catch {}
+}, 3000);
+client.on('ready', () => { console.log('[ready]'); clearInterval(iv); });
+
 /*	SERVER CONSOLE COMMANDS SECTION
 */
 let rl = null;
@@ -504,7 +487,6 @@ const getDalleMiniMedia = (query) => {
 client.on('message', async msg => {
 	const lowerBody = msg.body.toLowerCase();
 	console.log(`str = (${typeof lowerBody})`, lowerBody);
-	/*
 	const greetings = [cmdDelimiter + 'hello', 'hi', 'hey', 'hello'];
 	
 	if (greetings.some(greet => lowerBody.startsWith(greet))) {
@@ -515,7 +497,6 @@ client.on('message', async msg => {
 		await client.sendMessage(msg.from, holaCommandResponse);
 		functionCounts.menuCount++;
 	}
-	*/
 	if (lowerBody.startsWith('@ping')) {
 		await client.sendMessage(msg.from, pingSuccessful);
 		functionCounts.pingCount++;
@@ -749,6 +730,119 @@ client.on('message', async msg => {
 		await client.sendMessage(msg.from, txt);
 		}
 	}
+	else if (lowerBody.startsWith('@loop')) {
+	  const argsText = msg.body.slice('@loop'.length).trim();
+
+	  if (!argsText) {
+		await client.sendMessage(msg.from, noQueryLoopGeneral);
+		return;
+	  }
+
+	  const { parseLoopArgs, handleLoopCommand } = require('../scripts/loopHandler');
+	  const parsed = parseLoopArgs(argsText);
+
+	  if (!parsed.ok) {
+		if (parsed.reason === 'bad_mode')           await client.sendMessage(msg.from, noQueryLoopInvalid);
+		else if (parsed.reason === 'missing_ref') {
+		  const m = (parsed.mode || '').toLowerCase();
+		  if (m === 'arm')      await client.sendMessage(msg.from, noQueryLoopArmShort);
+		  else if (m === 'drive') await client.sendMessage(msg.from, noQueryLoopDriveShort);
+		  else if (m === 'motor') await client.sendMessage(msg.from, noQueryLoopMotorShort);
+		  else await client.sendMessage(msg.from, noQueryLoopInvalid);
+		}
+		else if (parsed.reason === 'bad_number')    await client.sendMessage(msg.from, loopBadNumber);
+		else                                        await client.sendMessage(msg.from, noQueryLoopGeneral);
+		return;
+	  }
+
+	  try {
+		const res = await handleLoopCommand(parsed.params);
+		const { img, metrics } = res;
+
+		const media = new MessageMedia('image/png', fs.readFileSync(img).toString('base64'), `loop_${metrics.mode}.png`);
+		const f2 = (v) => (v == null ? '—' : Number(v).toFixed(2));
+		const inalcanzable = (metrics.reachable === false);
+
+		let caption = '';
+		if (metrics.mode === 'arm') {
+		  caption =
+			`Comparación lazo abierto vs cerrado (articulación) con PID (Kp=${f2(metrics.Kp)}, Ki=${f2(metrics.Ki)}, Kd=${f2(metrics.Kd)}).\n` +
+			`Abierto: θ_ss = K·Umax = ${f2(metrics.x_ss_open)} rad (θ_ref = ${f2(metrics.ref)}).\n` +
+			(inalcanzable
+			  ? `Cerrado: la referencia no es alcanzable con Umax y K actuales (saturación total ≈ ${f2(metrics.sat_time)} s; déficit ≈ ${f2(metrics.deficit)} rad).`
+			  : `Cerrado: ts ≈ ${f2(metrics.ts)} s; error final ≈ ${f2(metrics.x_final_closed - metrics.ref)} rad; saturación ≈ ${f2(metrics.sat_time)} s.`);
+		} else if (metrics.mode === 'drive') {
+		  caption =
+			`Comparación lazo abierto vs cerrado (velocidad) con PID (Kp=${f2(metrics.Kp)}, Ki=${f2(metrics.Ki)}, Kd=${f2(metrics.Kd)}).\n` +
+			`Abierto: v_ss = K·Umax = ${f2(metrics.x_ss_open)} m/s (v_ref = ${f2(metrics.ref)}).\n` +
+			(inalcanzable
+			  ? `Cerrado: v_ref no es alcanzable con Umax y K actuales (saturación total ≈ ${f2(metrics.sat_time)} s; déficit ≈ ${f2(metrics.deficit)} m/s).`
+			  : `Cerrado: ts ≈ ${f2(metrics.ts)} s; error final ≈ ${f2(metrics.x_final_closed - metrics.ref)} m/s; saturación ≈ ${f2(metrics.sat_time)} s.`);
+		} else {
+		  caption =
+			`Comparación lazo abierto vs cerrado (motor DC) con PID (Kp=${f2(metrics.Kp)}, Ki=${f2(metrics.Ki)}, Kd=${f2(metrics.Kd)}).\n` +
+			`Abierto: ω_ss = K·Umax = ${f2(metrics.x_ss_open)} rad/s (ω_ref = ${f2(metrics.ref)}).\n` +
+			(inalcanzable
+			  ? `Cerrado: ω_ref no es alcanzable con Umax y K actuales (saturación total ≈ ${f2(metrics.sat_time)} s; déficit ≈ ${f2(metrics.deficit)} rad/s).`
+			  : `Cerrado: ts ≈ ${f2(metrics.ts)} s; error final ≈ ${f2(metrics.x_final_closed - metrics.ref)} rad/s; saturación ≈ ${f2(metrics.sat_time)} s.`);
+		}
+
+		await client.sendMessage(msg.from, media, { caption });
+	  } catch (e) {
+		console.error('loop failed:', e.code || '', e.message || e);
+		const txt =
+		  e.code === 'LOOP_TOO_MANY_STEPS' ? template(loopTooManySteps, e.meta) :
+		  e.code === 'LOOP_BAD_T'          ? loopBadT :
+		  e.code === 'LOOP_BAD_DT'         ? loopBadT :
+		  e.code === 'EBADPARAMS'          ? loopBadNumber :
+		  e.code === 'EBADJSON'            ? genericError :
+		  genericError;
+		await client.sendMessage(msg.from, txt);
+	  }
+	}
+	else if (lowerBody.startsWith('@step')) {
+	  const argsText = msg.body.slice('@step'.length).trim();
+
+	  // si NO hay argumentos → mostrar ayuda y salir
+	  if (!argsText || argsText.toLowerCase() === 'help' || argsText.toLowerCase() === 'params') {
+		await client.sendMessage(msg.from, noQueryStep);
+		return;
+	  }
+
+	  const { parseStepArgs, handleStepCommand } = require('../scripts/stepHandler');
+	  const parsed = parseStepArgs(argsText);
+
+	  if (!parsed.ok) {
+		await client.sendMessage(msg.from, stepBadNumber);
+		return;
+	  }
+
+	  try {
+		const res = await handleStepCommand(parsed.params);
+		const { img, metrics } = res;
+
+		const media = new MessageMedia('image/png', fs.readFileSync(img).toString('base64'), 'step.png');
+		const f2 = v => (v == null || Number.isNaN(Number(v))) ? '—' : Number(v).toFixed(2);
+
+		const caption =
+		  `Respuesta al escalón (A=${f2(metrics.A)}). Planta 2º orden (ζ=${f2(metrics.zeta)}, ωₙ=${f2(metrics.wn)} rad/s). ` +
+		  `PID: Kp=${f2(metrics.Kp)}, Ki=${f2(metrics.Ki)}, Kd=${f2(metrics.Kd)}.\n` +
+		  `Métricas: tr≈${f2(metrics.tr)} s, Mp≈${f2(metrics.Mp)} %, ts≈${f2(metrics.ts)} s, error final≈${f2(metrics.ess)}.`;
+
+		await client.sendMessage(msg.from, media, { caption });
+	  } catch (e) {
+		console.error('step failed:', e.code || '', e.message || e);
+		const txt =
+		  e.code === 'STEP_TOO_MANY_STEPS' ? template(stepTooManySteps, e.meta) :
+		  e.code === 'STEP_BAD_T'          ? stepBadT :
+		  e.code === 'STEP_BAD_DT'         ? stepBadT :
+		  e.code === 'STEP_BAD_ZETA'       ? stepBadZeta :
+		  e.code === 'STEP_BAD_WN'         ? stepBadWn :
+		  e.code === 'EBADJSON'            ? errStepBadJSON :
+		  stepGenericError;
+		await client.sendMessage(msg.from, txt);
+	  }
+	}
 	/*
 	else if (lowerBody.startsWith('!pro')) {
 		const query = msg.body.slice(5).trim();
@@ -762,7 +856,7 @@ client.on('message', async msg => {
 		}
 		functionCounts.dalleCount++;
 	}
-	
+	/*
 	else{
 		const query = msg.body;
 		//console.log(`str = (${typeof query})`, query);
