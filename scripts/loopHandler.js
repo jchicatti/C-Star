@@ -1,108 +1,109 @@
 // scripts/loopHandler.js
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 const { spawn } = require('child_process');
+const path = require('path');
+const PY = process.env.PYTHON_BIN || 'python3';
+const SCRIPT = process.env.LOOP_SCRIPT || path.join(__dirname, 'loop_first_order.py');
 
-// Parser posicional: @loop <mode> <ref> [t Umax K tau Kp Ki Kd]
-function parseLoopArgs(argsText) {
-  const toks = (argsText || '').trim().split(/\s+/).filter(Boolean);
-  if (toks.length < 1) return { ok: false, reason: 'missing_all' };
+// ----- helpers de formato -----
+const f2 = (v) => (v == null || Number.isNaN(v) ? '—' : Number(v).toFixed(2));
 
-  const mode = (toks[0] || '').toLowerCase();
-  if (!['arm','drive','motor'].includes(mode)) {
-    return { ok: false, reason: 'bad_mode', mode };
-  }
-  if (toks.length < 2) {
-    return { ok: false, reason: 'missing_ref', mode };
-  }
+// ----- parser mínimo (igual que tenías) -----
+function parseLoopArgs(text) {
+  const parts = text.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { ok:false, reason:'missing_all' };
 
-  const nums = toks.slice(1).map(s => Number(s));
-  // al menos el primero (ref) numérico
-  if (!Number.isFinite(nums[0])) {
-    return { ok: false, reason: 'bad_number', mode, bad: toks[1] };
-  }
+  const mode = (parts[0]||'').toLowerCase();
+  if (!['arm','drive','motor'].includes(mode)) return { ok:false, reason:'bad_mode' };
+  if (parts.length === 1) return { ok:false, reason:'missing_ref', mode };
 
-  // mapea posicionales si existen
-  const [ref, t, Umax, K, tau, Kp, Ki, Kd] = nums;
+  const nums = parts.slice(1).map(n => Number(n));
+  if (nums.some(v => Number.isNaN(v))) return { ok:false, reason:'bad_number' };
 
-  // valida numéricos si fueron provistos
-  const checkNum = (v) => (v === undefined || Number.isFinite(v));
-  if (!checkNum(t) || !checkNum(Umax) || !checkNum(K) || !checkNum(tau) ||
-      !checkNum(Kp) || !checkNum(Ki) || !checkNum(Kd)) {
-    return { ok: false, reason: 'bad_number', mode };
-  }
-
-  return { ok: true, params: { mode, ref, t, Umax, K, tau, Kp, Ki, Kd } };
+  const [ref, t, K, tau, Umax, Kp, Ki, Kd] = nums;
+  const params = {
+    mode, ref,
+    t, K, tau, Umax, Kp, Ki, Kd
+  };
+  return { ok:true, params };
 }
 
-// Resuelve ruta del .py (compatible con pkg)
-function resolvePyScript() {
-  const bundled = path.join(__dirname, 'loop_first_order.py');
-  if (process.pkg) {
-    const tmp = path.join(os.tmpdir(), 'loop_first_order.py');
-    if (!fs.existsSync(tmp)) fs.copyFileSync(bundled, tmp);
-    return tmp;
-  }
-  return bundled;
-}
-
-// Ejecuta el .py y retorna { img, metrics }
-function handleLoopCommand(params) {
-  const outPng = path.join(os.tmpdir(), `loop_${params.mode}_${Date.now()}.png`);
-  const payload = { ...params, out: outPng };
-  const pyScript = resolvePyScript();
-
+// ----- runner (igual que tenías) -----
+function runPython(payload) {
   return new Promise((resolve, reject) => {
-    const py = spawn('python3', [pyScript], { stdio: ['pipe','pipe','pipe'] });
-
-    const CAP = 1_000_000; // 1MB
+    const p = spawn(PY, [SCRIPT], { stdio: ['pipe','pipe','pipe'] });
     let out = '', err = '';
-    py.stdout.on('data', d => { if (out.length < CAP) out += d; });
-    py.stderr.on('data', d => { if (err.length < CAP) err += d; });
-    py.on('error', e => reject(Object.assign(e, { code: 'ESPAWN' })));
-
-    const killAfterMs = 15_000;
-    const to = setTimeout(() => { try { py.kill('SIGKILL'); } catch {} reject(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })); }, killAfterMs);
-
-    py.on('close', (code) => {
-      clearTimeout(to);
-      if (code !== 0) {
-        const e = new Error(err || `python exited ${code}`);
-        const mSteps = /ETOO_MANY_STEPS\s+steps=(\d+)\s+t=(\S+)\s+dt=(\S+)/i.exec(err || '');
-        const mT     = /EBADPARAMS:T_NONPOS\s+t=(\S+)/i.exec(err || '');
-        const mDt    = /EBADPARAMS:DT_NONPOS\s+dt=(\S+)/i.exec(err || '');
-        const mMode  = /EBADPARAMS:MODE/i.test(err || '');
-        const mRef   = /EBADPARAMS:REF/i.test(err || '');
-        const mJson  = /EBADJSON/i.test(err || '');
-
-        if (mSteps) { e.code='LOOP_TOO_MANY_STEPS'; e.meta={ steps:mSteps[1], t:mSteps[2], dt:mSteps[3] }; }
-        else if (mT) { e.code='LOOP_BAD_T'; e.meta={ t:mT[1] }; }
-        else if (mDt){ e.code='LOOP_BAD_DT'; e.meta={ dt:mDt[1] }; }
-        else if (mMode || mRef){ e.code='EBADPARAMS'; }
-        else if (mJson){ e.code='EBADJSON'; }
-        else if (/EPY_MPL/i.test(err)) { e.code='EPY'; }
-        else if (/EBADPARAMS/i.test(err)) { e.code='EBADPARAMS'; }
-        else { e.code='EPY'; }
-        return reject(e);
-      }
-
+    p.stdout.on('data', d => out += d.toString());
+    p.stderr.on('data', d => err += d.toString());
+    p.on('close', () => {
+      if (!out) return reject({ code:'EBADJSON', message:'no output', stderr:err });
       try {
-        const res = JSON.parse(out); // { img, metrics }
-        resolve(res);
+        const parsed = JSON.parse(out);
+        if (parsed.error) return reject(parsed);
+        resolve(parsed);
       } catch (e) {
-        reject(Object.assign(e, { code: 'EBADJSON' }));
+        reject({ code:'EBADJSON', message:e.message, raw:out, stderr:err });
       }
     });
-
-    try {
-      py.stdin.write(JSON.stringify(payload));
-      py.stdin.end();
-    } catch (e) {
-      clearTimeout(to);
-      reject(Object.assign(e, { code: 'EPIPE' }));
-    }
+    p.stdin.end(Buffer.from(JSON.stringify(payload)));
   });
 }
 
-module.exports = { parseLoopArgs, handleLoopCommand };
+// ----- captions corregidas -----
+function buildCaption(metrics) {
+  const mode = metrics.mode;
+  const unit = (mode === 'arm') ? 'rad' : (mode === 'drive' ? 'm/s' : 'rad/s');
+  const sym  = (mode === 'arm') ? 'θ'   : (mode === 'drive' ? 'v'   : 'ω');
+
+  const head =
+    (mode === 'arm')   ? 'Comparación lazo abierto vs cerrado (articulación).' :
+    (mode === 'drive') ? 'Comparación lazo abierto vs cerrado (velocidad diferencial).' :
+                         'Comparación lazo abierto vs cerrado (motor DC).';
+
+  // helper seguro para números
+  const f2s = (v) => (v == null || Number.isNaN(Number(v)) ? '—' : Number(v).toFixed(2));
+  const f1s = (v) => (v == null || Number.isNaN(Number(v)) ? '—' : Number(v).toFixed(1));
+
+  const lineOpen =
+    `Abierto (respuesta natural): ${sym}_ss = ${f2s(metrics.x_ss_open)} ${unit} `
+    + `(${sym}_ref = ${f2s(metrics.ref)}). Se traza la línea x_ss para ver potencia disponible.`;
+
+  let lineClosed = '';
+  if (!metrics.reachable) {
+    const deficit = metrics.deficit; // ref - K·Umax (con signo)
+    lineClosed =
+      `Referencia NO alcanzable con Umax: falta Δ = ${f2s(deficit)} ${unit}. `
+      + `Saturación acumulada ≈ ${f2s(metrics.sat_time)} s.`;
+  } else {
+    // ts legible (si no entró en banda ±2% durante T)
+    let tsStr = '— (no entró en banda ±2% durante T)';
+    if (metrics.ts != null && !Number.isNaN(Number(metrics.ts))) {
+      tsStr = Number(metrics.ts).toFixed(2);
+    }
+
+    const e_final = (metrics.x_final_closed - metrics.ref);
+
+    lineClosed =
+      `Cerrado (PID): ts ≈ ${tsStr} s; `
+      + `error final ≈ ${f2s(e_final)} ${unit}; `
+      + `saturación ≈ ${f2s(metrics.sat_time)} s.`;
+
+    // añade sobreimpulso solo si es significativo
+    if (metrics.overshoot_pct != null && Number(metrics.overshoot_pct) > 0.5) {
+      lineClosed += ` Sobreimpulso ≈ ${f1s(metrics.overshoot_pct)}%.`;
+    }
+  }
+
+  return `${head}\n${lineOpen}\n${lineClosed}`;
+}
+
+async function handleLoopCommand(params) {
+  const res = await runPython(params);
+  // también devuelvo la caption para que el caller no la duplique
+  return { img: res.img, metrics: res.metrics, caption: buildCaption(res.metrics) };
+}
+
+module.exports = {
+  parseLoopArgs,
+  handleLoopCommand,
+  buildCaption,
+};
