@@ -14,6 +14,7 @@ const { parseIKArgs, handleIKCommand } =  require(path.resolve(__dirname, '..', 
 const { parseScaraArgs, handleScaraCommand } = require(path.resolve(__dirname, '..', 'scripts', 'scaraHandler.js'));
 const { parseLoopArgs, handleLoopCommand } = require(path.resolve(__dirname, '..', 'scripts', 'loopHandler.js'));
 const { parseStepArgs, handleStepCommand } = require(path.resolve(__dirname, '..', 'scripts','stepHandler.js'));
+const { parseSigArgs, handleSigCommand } = require(path.resolve(__dirname, '..', 'scripts','sigHandler'));
 /*	REQUIRED NODES SECTION
 	Do not modify this section.
 	No modifique este bloque de código.
@@ -35,7 +36,7 @@ const MODEL_URL = 'http://127.0.0.1:11434/api/generate';
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const client = new Client({
   puppeteer: {
-    headless: false, // para ver qué pasa
+    headless: true,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -45,7 +46,6 @@ const client = new Client({
       '--disable-extensions',
     ],
   },
-  // quita webVersionCache mientras depuras
   authStrategy: new LocalAuth({ dataPath: path.join(basePath, '.wwebjs_auth') }),
   takeoverOnConflict: true,
   restartOnAuthFail: true,
@@ -141,121 +141,6 @@ const iv = setInterval(async () => {
   try { console.log('state:', await client.getState()); } catch {}
 }, 3000);
 client.on('ready', () => { console.log('[ready]'); clearInterval(iv); });
-
-/*	SERVER CONSOLE COMMANDS SECTION
-*/
-let rl = null;
-function openConsole() {
-  if (rl) return rl;
-  rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: '> ' });
-  rl.on('line', onLine);
-  rl.prompt();
-  return rl;
-}
-function closeConsole() {
-  if (!rl) return;
-  rl.removeListener('line', onLine);
-  rl.close();
-  rl = null;
-}
-async function onLine(input) {
-    switch(input.trim()) {
-		// CONSOLE COMMANDS GO HERE. Add more cases if needed.
-        case 'broadcast':
-            // Broadcast message to all authorized IDs
-            const broadcastMessage = 'Broadcasted message to all authorized IDs';
-            for (const id of authorizedIDs) {
-                client.sendMessage(`${id}@c.us`, broadcastMessage);
-            }
-            console.log('\nBroadcast message sent to all authorized IDs.');
-            break;
-		case 'fetch':
-			await testFetch();
-			break;
-		case 'quit': closeConsole(); break;
-        case 'listcontacts':
-            try {
-                const contacts = await client.getContacts();
-                console.log(`\nYou have ${contacts.length} contacts.`);
-                contacts.forEach(contact => {
-                    console.log(`ID: ${contact.id.user}, Name: ${contact.name || contact.pushname}`);
-                });
-            } catch (error) {
-                console.error('Error fetching contacts:', error);
-            }
-            break;
-		case 'listgroups':
-			try {
-                const chats = await client.getChats();
-                const groupChats = chats.filter(chat => chat.isGroup);
-                console.log(`You have ${groupChats.length} group chats.`);
-                groupChats.forEach(groupChat => {
-                    console.log(`ID: ${groupChat.id.user}, Title: ${groupChat.name}`);
-                });
-            } catch (error) {
-                console.error('Error fetching group chats:', error);
-            }
-			break;
-		case 'log':
-			writeLogToFile();
-			break;
-		case 'ping':
-			functionCounts.pingCount++;
-			break;
-		case cmdDelimiter + ollamaCmd:
-			const response = await askModel("Qué dice mi color favorito de mí?");
-			console.log(response);
-        default:
-			if (input.trim().startsWith('!img')) {
-				const searchTerm = input.trim().slice(5);
-				try {
-					const firstImageSource = await getImageSource(searchTerm);
-					const infoMessage = await getInfoMessage(firstImageSource);
-					console.log(infoMessage);
-				} catch (error) {
-					console.error('Error fetching or sending image:', error);
-				}
-			}
-			else if (input.trim().startsWith('!vid')) {
-				const searchTerm = input.trim().slice(5);
-				try {
-					const firstVideoUrl = await getVideoSource(searchTerm);
-					console.log(`Video URL: ${firstVideoUrl}`);
-				} catch (error) {
-					console.error('Error fetching or sending video:', error.response ? error.response.data : error);
-				}
-			}
-			else if (input.trim().startsWith('!gpt')) {
-				const query = input.trim().slice(5);
-				const replyText = await getOpenAIResponse(query);
-				console.log(replyText);
-			}
-			else if (input.trim().toLowerCase().startsWith('!wiki')) {
-				let langCode = 'es'; // Default language code
-				let query;
-				
-				if (input.trim()[5] === ' ') { // Check if there's a space after !wiki
-					query = input.trim().slice(6).trim(); // If true, it's the default language
-				} else {
-					langCode = input.trim().substring(5, 7).toLowerCase(); // Extract the language code
-					query = input.trim().slice(7).trim(); // Extract the query
-				}
-				if (query.length > 0) {
-					const wikiResponse = await getWikipediaResponse(query, langCode);
-					console.log(wikiResponse.text);
-					if (wikiResponse.url) {
-						console.log("Fuente: " + wikiResponse.url);
-					}
-				} else {
-					console.log("Please provide a search term after !wiki");
-				}
-			}
-			else {
-				console.log('Unknown command: ', input.trim());
-			}
-		break;
-    }
-}
 
 /*	CHATBOT FETCHING SECTION
 */
@@ -730,63 +615,47 @@ client.on('message', async msg => {
 		await client.sendMessage(msg.from, txt);
 		}
 	}
+	// ...dentro de client.on('message', async (msg) => { ... })
 	else if (lowerBody.startsWith('@loop')) {
 	  const argsText = msg.body.slice('@loop'.length).trim();
 
+	  // caso: solo @loop
 	  if (!argsText) {
 		await client.sendMessage(msg.from, noQueryLoopGeneral);
 		return;
 	  }
-
-	  const { parseLoopArgs, handleLoopCommand } = require('../scripts/loopHandler');
 	  const parsed = parseLoopArgs(argsText);
 
+	  // rutas rápidas de error de uso
 	  if (!parsed.ok) {
-		if (parsed.reason === 'bad_mode')           await client.sendMessage(msg.from, noQueryLoopInvalid);
-		else if (parsed.reason === 'missing_ref') {
-		  const m = (parsed.mode || '').toLowerCase();
-		  if (m === 'arm')      await client.sendMessage(msg.from, noQueryLoopArmShort);
-		  else if (m === 'drive') await client.sendMessage(msg.from, noQueryLoopDriveShort);
-		  else if (m === 'motor') await client.sendMessage(msg.from, noQueryLoopMotorShort);
-		  else await client.sendMessage(msg.from, noQueryLoopInvalid);
+		if (parsed.reason === 'missing_all') {
+		  await client.sendMessage(msg.from, noQueryLoopGeneral);
+		} else if (parsed.reason === 'bad_mode') {
+		  await client.sendMessage(msg.from, noQueryLoopInvalid);
+		} else if (parsed.reason === 'missing_ref') {
+		  const m = parsed.mode;
+		  if (m === 'arm')        await client.sendMessage(msg.from, noQueryLoopArm);
+		  else if (m === 'drive') await client.sendMessage(msg.from, noQueryLoopDrive);
+		  else if (m === 'motor') await client.sendMessage(msg.from, noQueryLoopMotor);
+		  else                    await client.sendMessage(msg.from, noQueryLoopInvalid);
+		} else if (parsed.reason === 'bad_number') {
+		  await client.sendMessage(msg.from, loopBadNumber);
+		} else if (parsed.reason === 'bad_t') {
+		  await client.sendMessage(msg.from, loopBadT);
+		} else {
+		  await client.sendMessage(msg.from, noQueryLoopGeneral);
 		}
-		else if (parsed.reason === 'bad_number')    await client.sendMessage(msg.from, loopBadNumber);
-		else                                        await client.sendMessage(msg.from, noQueryLoopGeneral);
 		return;
 	  }
 
 	  try {
 		const res = await handleLoopCommand(parsed.params);
-		const { img, metrics } = res;
-
-		const media = new MessageMedia('image/png', fs.readFileSync(img).toString('base64'), `loop_${metrics.mode}.png`);
-		const f2 = (v) => (v == null ? '—' : Number(v).toFixed(2));
-		const inalcanzable = (metrics.reachable === false);
-
-		let caption = '';
-		if (metrics.mode === 'arm') {
-		  caption =
-			`Comparación lazo abierto vs cerrado (articulación) con PID (Kp=${f2(metrics.Kp)}, Ki=${f2(metrics.Ki)}, Kd=${f2(metrics.Kd)}).\n` +
-			`Abierto: θ_ss = K·Umax = ${f2(metrics.x_ss_open)} rad (θ_ref = ${f2(metrics.ref)}).\n` +
-			(inalcanzable
-			  ? `Cerrado: la referencia no es alcanzable con Umax y K actuales (saturación total ≈ ${f2(metrics.sat_time)} s; déficit ≈ ${f2(metrics.deficit)} rad).`
-			  : `Cerrado: ts ≈ ${f2(metrics.ts)} s; error final ≈ ${f2(metrics.x_final_closed - metrics.ref)} rad; saturación ≈ ${f2(metrics.sat_time)} s.`);
-		} else if (metrics.mode === 'drive') {
-		  caption =
-			`Comparación lazo abierto vs cerrado (velocidad) con PID (Kp=${f2(metrics.Kp)}, Ki=${f2(metrics.Ki)}, Kd=${f2(metrics.Kd)}).\n` +
-			`Abierto: v_ss = K·Umax = ${f2(metrics.x_ss_open)} m/s (v_ref = ${f2(metrics.ref)}).\n` +
-			(inalcanzable
-			  ? `Cerrado: v_ref no es alcanzable con Umax y K actuales (saturación total ≈ ${f2(metrics.sat_time)} s; déficit ≈ ${f2(metrics.deficit)} m/s).`
-			  : `Cerrado: ts ≈ ${f2(metrics.ts)} s; error final ≈ ${f2(metrics.x_final_closed - metrics.ref)} m/s; saturación ≈ ${f2(metrics.sat_time)} s.`);
-		} else {
-		  caption =
-			`Comparación lazo abierto vs cerrado (motor DC) con PID (Kp=${f2(metrics.Kp)}, Ki=${f2(metrics.Ki)}, Kd=${f2(metrics.Kd)}).\n` +
-			`Abierto: ω_ss = K·Umax = ${f2(metrics.x_ss_open)} rad/s (ω_ref = ${f2(metrics.ref)}).\n` +
-			(inalcanzable
-			  ? `Cerrado: ω_ref no es alcanzable con Umax y K actuales (saturación total ≈ ${f2(metrics.sat_time)} s; déficit ≈ ${f2(metrics.deficit)} rad/s).`
-			  : `Cerrado: ts ≈ ${f2(metrics.ts)} s; error final ≈ ${f2(metrics.x_final_closed - metrics.ref)} rad/s; saturación ≈ ${f2(metrics.sat_time)} s.`);
-		}
-
+		const { img, metrics, caption } = res;
+		const media = new MessageMedia(
+		  'image/png',
+		  fs.readFileSync(img).toString('base64'),
+		  `loop_${metrics.mode}.png`
+		);
 		await client.sendMessage(msg.from, media, { caption });
 	  } catch (e) {
 		console.error('loop failed:', e.code || '', e.message || e);
@@ -843,6 +712,59 @@ client.on('message', async msg => {
 		await client.sendMessage(msg.from, txt);
 	  }
 	}
+	else if (lowerBody.startsWith('@sig')) {
+	  const argsText = msg.body.slice('@sig'.length).trim();
+
+	  // ayuda mínima
+	  if (!argsText || /^help$/i.test(argsText)) {
+		const help =
+		  "uso: @sig <plant> <input> <A> [t] [Kp Ki Kd] [Umax] [K tau | wn zeta] [noise] [delay] [dist dist_t] [showopen]\n" +
+		  "plant: 1|first (1er orden)  ·  2|second (2º orden)\n" +
+		  "input: step | ramp | sine | square | chirp\n" +
+		  "ejemplos:\n" +
+		  "@sig 1 step 1.0 8 1.2 0.8 0.1 1.0 1 0.6 0 0 0.4 3.0 showopen\n" +
+		  "@sig 2 step 1.0 8 1.8 1.0 0.12 1.5 2.0 0.4 0.02 0.05";
+		await client.sendMessage(msg.from, help);
+		return;
+	  }
+	  
+	  const parsed = parseSigArgs(argsText);
+
+	  if (!parsed.ok) {
+		const why =
+		  parsed.reason === 'missing_min' ? "uso: @sig <plant> <input> <A> [...]. ejemplo: @sig 1 step 1.0" :
+		  parsed.reason === 'bad_plant'   ? "planta inválida. usa 1|first o 2|second." :
+		  parsed.reason === 'bad_input'   ? "entrada inválida. usa step|ramp|sine|square|chirp." :
+		  parsed.reason === 'bad_number'  ? "alguno de los parámetros no es numérico." :
+											"formato inválido. prueba: @sig 1 step 1.0";
+		await client.sendMessage(msg.from, why);
+		return;
+	  }
+
+	  try {
+		const res = await handleSigCommand(parsed.params);
+		const { img, metrics, caption } = res;
+
+		const media = new MessageMedia(
+		  'image/png',
+		  fs.readFileSync(img).toString('base64'),
+		  `sig_${metrics.plant}_${metrics.input}.png`
+		);
+		await client.sendMessage(msg.from, media, { caption });
+	  } catch (e) {
+		console.error('sig failed:', e.code || '', e.message || e);
+		const txt =
+		  e.code === 'SIG_TOO_MANY_STEPS' ? `simulación demasiado larga (≈${e.meta?.steps}). reduce t o aumenta dt.` :
+		  e.code === 'SIG_BAD_T'          ? "t y dt deben ser > 0." :
+		  e.code === 'SIG_BAD_TAU'        ? "tau debe ser > 0 para planta de 1er orden." :
+		  e.code === 'SIG_BAD_WN'         ? "ωn debe ser > 0 para planta de 2º orden." :
+		  e.code === 'SIG_BAD_ZETA'       ? "zeta debe especificarse para planta de 2º orden." :
+		  e.code === 'EBADJSON'           ? "no pude leer los parámetros, intenta con números simples." :
+											"no pude simular @sig. revisa el formato o intenta con valores más sencillos.";
+		await client.sendMessage(msg.from, txt);
+	  }
+	}
+
 	/*
 	else if (lowerBody.startsWith('!pro')) {
 		const query = msg.body.slice(5).trim();
@@ -876,6 +798,121 @@ client.on('message', async msg => {
 */
 client.initialize();
 console.log('Initialized.');
+
+/*	SERVER CONSOLE COMMANDS SECTION
+*/
+let rl = null;
+function openConsole() {
+  if (rl) return rl;
+  rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: '> ' });
+  rl.on('line', onLine);
+  rl.prompt();
+  return rl;
+}
+function closeConsole() {
+  if (!rl) return;
+  rl.removeListener('line', onLine);
+  rl.close();
+  rl = null;
+}
+async function onLine(input) {
+    switch(input.trim()) {
+		// CONSOLE COMMANDS GO HERE. Add more cases if needed.
+        case 'broadcast':
+            // Broadcast message to all authorized IDs
+            const broadcastMessage = 'Broadcasted message to all authorized IDs';
+            for (const id of authorizedIDs) {
+                client.sendMessage(`${id}@c.us`, broadcastMessage);
+            }
+            console.log('\nBroadcast message sent to all authorized IDs.');
+            break;
+		case 'fetch':
+			await testFetch();
+			break;
+		case 'quit': closeConsole(); break;
+        case 'listcontacts':
+            try {
+                const contacts = await client.getContacts();
+                console.log(`\nYou have ${contacts.length} contacts.`);
+                contacts.forEach(contact => {
+                    console.log(`ID: ${contact.id.user}, Name: ${contact.name || contact.pushname}`);
+                });
+            } catch (error) {
+                console.error('Error fetching contacts:', error);
+            }
+            break;
+		case 'listgroups':
+			try {
+                const chats = await client.getChats();
+                const groupChats = chats.filter(chat => chat.isGroup);
+                console.log(`You have ${groupChats.length} group chats.`);
+                groupChats.forEach(groupChat => {
+                    console.log(`ID: ${groupChat.id.user}, Title: ${groupChat.name}`);
+                });
+            } catch (error) {
+                console.error('Error fetching group chats:', error);
+            }
+			break;
+		case 'log':
+			writeLogToFile();
+			break;
+		case 'ping':
+			functionCounts.pingCount++;
+			break;
+		case cmdDelimiter + ollamaCmd:
+			const response = await askModel("Qué dice mi color favorito de mí?");
+			console.log(response);
+        default:
+			if (input.trim().startsWith('!img')) {
+				const searchTerm = input.trim().slice(5);
+				try {
+					const firstImageSource = await getImageSource(searchTerm);
+					const infoMessage = await getInfoMessage(firstImageSource);
+					console.log(infoMessage);
+				} catch (error) {
+					console.error('Error fetching or sending image:', error);
+				}
+			}
+			else if (input.trim().startsWith('!vid')) {
+				const searchTerm = input.trim().slice(5);
+				try {
+					const firstVideoUrl = await getVideoSource(searchTerm);
+					console.log(`Video URL: ${firstVideoUrl}`);
+				} catch (error) {
+					console.error('Error fetching or sending video:', error.response ? error.response.data : error);
+				}
+			}
+			else if (input.trim().startsWith('!gpt')) {
+				const query = input.trim().slice(5);
+				const replyText = await getOpenAIResponse(query);
+				console.log(replyText);
+			}
+			else if (input.trim().toLowerCase().startsWith('!wiki')) {
+				let langCode = 'es'; // Default language code
+				let query;
+				
+				if (input.trim()[5] === ' ') { // Check if there's a space after !wiki
+					query = input.trim().slice(6).trim(); // If true, it's the default language
+				} else {
+					langCode = input.trim().substring(5, 7).toLowerCase(); // Extract the language code
+					query = input.trim().slice(7).trim(); // Extract the query
+				}
+				if (query.length > 0) {
+					const wikiResponse = await getWikipediaResponse(query, langCode);
+					console.log(wikiResponse.text);
+					if (wikiResponse.url) {
+						console.log("Fuente: " + wikiResponse.url);
+					}
+				} else {
+					console.log("Please provide a search term after !wiki");
+				}
+			}
+			else {
+				console.log('Unknown command: ', input.trim());
+			}
+		break;
+    }
+}
 
 /*	CLOSING AND CLEANUP
 */
