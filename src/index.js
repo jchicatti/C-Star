@@ -194,7 +194,7 @@ async function askModel(prompt) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'gemma3',
+      model: 'phi3',
       prompt: contextDelimiter + prompt,
       options: {
         maxTo: maxTokens,
@@ -669,50 +669,46 @@ client.on('message', async msg => {
 		await client.sendMessage(msg.from, txt);
 	  }
 	}
-	// ... dentro de client.on('message', async (msg) => { ... })
 	else if (lowerBody.startsWith('@step')) {
 	  const argsText = msg.body.slice('@step'.length).trim();
 
-	  // ayuda rápida
-	  if (!argsText || /^help$/i.test(argsText) || /^params$/i.test(argsText)) {
+	  // si NO hay argumentos → mostrar ayuda y salir
+	  if (!argsText || argsText.toLowerCase() === 'help' || argsText.toLowerCase() === 'params') {
 		await client.sendMessage(msg.from, noQueryStep);
 		return;
 	  }
+
+	  const { parseStepArgs, handleStepCommand } = require('../scripts/stepHandler');
 	  const parsed = parseStepArgs(argsText);
 
 	  if (!parsed.ok) {
-		const why =
-		  parsed.reason === 'bad_number' ? stepBadNumber :
-		  parsed.reason === 'bad_t'      ? stepBadT :
-		  parsed.reason === 'bad_dt'     ? stepBadT :
-		  parsed.reason === 'bad_zeta'   ? stepBadZeta :
-		  parsed.reason === 'bad_wn'     ? stepBadWn :
-										   stepGenericError;
-		await client.sendMessage(msg.from, why);
+		await client.sendMessage(msg.from, stepBadNumber);
 		return;
 	  }
 
 	  try {
 		const res = await handleStepCommand(parsed.params);
-		const { img, metrics, caption } = res;
+		const { img, metrics } = res;
 
-		const media = new MessageMedia(
-		  'image/png',
-		  fs.readFileSync(img).toString('base64'),
-		  'step.png'
-		);
+		const media = new MessageMedia('image/png', fs.readFileSync(img).toString('base64'), 'step.png');
+		const f2 = v => (v == null || Number.isNaN(Number(v))) ? '—' : Number(v).toFixed(2);
+
+		const caption =
+		  `Respuesta al escalón (A=${f2(metrics.A)}). Planta 2º orden (ζ=${f2(metrics.zeta)}, ωₙ=${f2(metrics.wn)} rad/s). ` +
+		  `PID: Kp=${f2(metrics.Kp)}, Ki=${f2(metrics.Ki)}, Kd=${f2(metrics.Kd)}.\n` +
+		  `Métricas: tr≈${f2(metrics.tr)} s, Mp≈${f2(metrics.Mp)} %, ts≈${f2(metrics.ts)} s, error final≈${f2(metrics.ess)}.`;
+
 		await client.sendMessage(msg.from, media, { caption });
 	  } catch (e) {
 		console.error('step failed:', e.code || '', e.message || e);
-		const code = (e.code || '').toUpperCase();
 		const txt =
-		  code === 'STEP_TOO_MANY_STEPS' ? template(stepTooManySteps, e.meta || {}) :
-		  code === 'STEP_BAD_T'          ? stepBadT :
-		  code === 'STEP_BAD_DT'         ? stepBadT :
-		  code === 'STEP_BAD_ZETA'       ? stepBadZeta :
-		  code === 'STEP_BAD_WN'         ? stepBadWn :
-		  code === 'EBADJSON'            ? errStepBadJSON :
-										   stepGenericError;
+		  e.code === 'STEP_TOO_MANY_STEPS' ? template(stepTooManySteps, e.meta) :
+		  e.code === 'STEP_BAD_T'          ? stepBadT :
+		  e.code === 'STEP_BAD_DT'         ? stepBadT :
+		  e.code === 'STEP_BAD_ZETA'       ? stepBadZeta :
+		  e.code === 'STEP_BAD_WN'         ? stepBadWn :
+		  e.code === 'EBADJSON'            ? errStepBadJSON :
+		  stepGenericError;
 		await client.sendMessage(msg.from, txt);
 	  }
 	}
