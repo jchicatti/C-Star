@@ -85,19 +85,21 @@ module.exports = {
 	loopBadT : "La duración de la simulación (t) y el paso (dt) deben ser > 0. Ejemplo: @loop arm 1.57 6 ✅",
 	loopBadNumber : "Alguno de los valores no es numérico. Ejemplo: @loop drive 0.8 ✅",
 	loopTooManySteps : "Simulación demasiado larga (pasos=${steps}, t=${t}, dt=${dt}). Reduce el tiempo o usa un dt mayor.",
-	noQueryStep : "@step grafica la respuesta al escalón de un sistema de segundo orden con PID (planta canónica). " +
-	"Sirve para observar sobreimpulso, amortiguamiento y tiempo de establecimiento sin Matlab.\n\n" +
-	"Uso: @step [A] [Kp Ki Kd] [t]\n" +
+	noQueryStep : "@step grafica la respuesta al escalón de un sistema de segundo orden con PID.\n" +
+	"Uso: @step A [Kp Ki Kd] [t] [dt zeta wn]\n" +
+	"Solo A es obligatorio. Los demás parámetros usan valores default si no se dan.\n" +
+	"Devuelve: tr (10–90%), Mp (%), ts (±2% con piso 0.02) y error final.\n" +
+	"Nota: si ts aparece como “—” significa que no entró en la banda durante el tiempo simulado.\n\n" +
 	"Ejemplos:\n" +
-	"@step 1 ✅\n" +
-	"@step 1 1.2 0 0.2 ✅\n" +
-	"@step 1 1.0 0.5 0.1 10 ✅\n" +
-	"tip: si ves una respuesta muy lenta, aumenta Kp o t; si hay mucho sobreimpulso, sube Kd; si queda error final, agrega Ki.",
+	"@step 1\n" +
+	"@step 1 1.2 0 0.2\n" +
+	"@step 1 1.0 0.5 0.1 10\n" +
+	"@step 1 1.8 0.6 0.1 12 0.01 0.35 2.0",
 	stepBadNumber   : "Los parámetros deben ser numéricos. Ejemplos: @step 1  |  @step 1 1.2 0 0.2",
-	stepBadT        : "La duración t debe ser > 0 s. Ejemplo: @step 1 1.0 0 0 8",
-	stepBadZeta     : "El amortiguamiento ζ debe ser ≥ 0. Ejemplo: @step 1 1 0 0 8 0.5",
-	stepBadWn       : "La frecuencia natural ωₙ debe ser > 0 rad/s. Ejemplo: @step 1 1 0 0 8 0.5 2.0",
-	errStepBadJSON  : "Hubo un problema leyendo parámetros. Intenta de nuevo con números simples (p. ej., @step 1 1.2 0 0.2).",
+	stepBadT        : "La duración t y el paso dt deben ser > 0. Ejemplo: @step 1 1.0 0 0 8 0.01",
+	stepBadZeta     : "El amortiguamiento ζ debe ser ≥ 0. Ejemplo: @step 1 1 0 0 8 0.01 0.5",
+	stepBadWn       : "La frecuencia natural ωₙ debe ser > 0 rad/s. Ejemplo: @step 1 1 0 0 8 0.01 0.5 2.0",
+	errStepBadJSON  : "Hubo un problema leyendo parámetros. Intenta de nuevo con números simples. Ej.: @step 1 1.2 0 0.2",
 	stepGenericError: "No pude simular @step. Revisa el formato o intenta con valores más sencillos.",
-	stepTooManySteps : "La simulación genera demasiados pasos (≈${steps}). Reduce t=${t} s o aumenta dt=${dt} s (p. ej., dt=0.02)."
+	stepTooManySteps : "La simulación genera demasiados pasos (≈${steps}). Reduce t=${t} s o aumenta dt=${dt} s. Ej.: dt=0.02"
 };

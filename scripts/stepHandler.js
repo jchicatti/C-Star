@@ -1,101 +1,106 @@
 // scripts/stepHandler.js
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs');
 
-// Posicional: @step [A] [Kp Ki Kd] [t]  (zeta, wn como opcionales avanzados al final)
+const PY = process.env.PYTHON_BIN || 'python3';
+const SCRIPT = process.env.STEP_SCRIPT || path.join(__dirname, 'step_second_order.py');
+
+// helpers
+const f2 = v => (v == null || Number.isNaN(Number(v))) ? '—' : Number(v).toFixed(2);
+const f1 = v => (v == null || Number.isNaN(Number(v))) ? '—' : Number(v).toFixed(1);
+
+// Posicional NUEVO: @step A Kp Ki Kd t dt zeta wn
+// Compatibilidad:   @step A Kp Ki Kd t [zeta [wn]]   // si no dan dt, usamos dt=0.01
 function parseStepArgs(argsText) {
   const toks = (argsText || '').trim().split(/\s+/).filter(Boolean);
+  if (toks.length === 0) return { ok:false, reason:'bad_number', bad:'' };
+
   const nums = toks.map(s => Number(s));
   for (let i = 0; i < nums.length; i++) {
-    if (!Number.isFinite(nums[i])) {
-      return { ok: false, reason: 'bad_number', bad: toks[i] };
-    }
+    if (!Number.isFinite(nums[i])) return { ok:false, reason:'bad_number', bad: toks[i] };
   }
 
   // defaults
-  let A = 1.0, Kp = 1.0, Ki = 0.0, Kd = 0.0, t = 8.0, zeta = 0.5, wn = 2.0;
+  let A=1.0, Kp=1.0, Ki=0.0, Kd=0.0;
+  let t=8.0, dt=0.01, zeta=0.5, wn=2.0;
 
-  if (nums.length >= 1) A = nums[0];
+  if (nums.length >= 1) A  = nums[0];
   if (nums.length >= 2) Kp = nums[1];
   if (nums.length >= 3) Ki = nums[2];
   if (nums.length >= 4) Kd = nums[3];
   if (nums.length >= 5) t  = nums[4];
-  if (nums.length >= 6) zeta = nums[5];     // avanzado (no documentado en noQuery)
-  if (nums.length >= 7) wn   = nums[6];     // avanzado (no documentado en noQuery)
 
-  return { ok: true, params: { A, Kp, Ki, Kd, t, zeta, wn } };
-}
-
-function resolvePyScript() {
-  const bundled = path.join(__dirname, 'step_second_order.py');
-  if (process.pkg) {
-    const tmp = path.join(os.tmpdir(), 'step_second_order.py');
-    if (!fs.existsSync(tmp)) fs.copyFileSync(bundled, tmp);
-    return tmp;
+  const rest = nums.slice(5);
+  if (rest.length === 0) {
+    // nada: dejamos dt,zeta,wn por defecto
+  } else if (rest.length === 1) {
+    // compat vieja: sólo zeta
+    zeta = rest[0];
+  } else if (rest.length === 2) {
+    // puede ser (dt,zeta) o (zeta,wn)
+    const a = rest[0], b = rest[1];
+    if (a <= 0.2) { // heurística: dt típico <= 0.2
+      dt = a; zeta = b;
+    } else {
+      zeta = a; wn = b;
+    }
+  } else {
+    // 3 o más → formato nuevo completo (dt, zeta, wn)
+    dt   = rest[0];
+    zeta = rest[1];
+    wn   = rest[2];
   }
-  return bundled;
+
+  if (!(t > 0))   return { ok:false, reason:'bad_t' };
+  if (!(dt > 0))  return { ok:false, reason:'bad_dt' };
+  if (!(zeta >= 0)) return { ok:false, reason:'bad_zeta' };
+  if (!(wn > 0))  return { ok:false, reason:'bad_wn' };
+
+  return { ok:true, params: { A, Kp, Ki, Kd, t, dt, zeta, wn } };
 }
 
-function handleStepCommand(params) {
-  const outPng = path.join(os.tmpdir(), `step_${Date.now()}.png`);
-  const payload = { ...params, out: outPng };
-  const pyScript = resolvePyScript();
-
+function runPython(payload) {
   return new Promise((resolve, reject) => {
-    const py = spawn('python3', [pyScript], { stdio: ['pipe','pipe','pipe'] });
-
-    const CAP = 1_000_000;
+    const p = spawn(PY, [SCRIPT], { stdio: ['pipe','pipe','pipe'] });
     let out = '', err = '';
-    py.stdout.on('data', d => { if (out.length < CAP) out += d; });
-    py.stderr.on('data', d => { if (err.length < CAP) err += d; });
-    py.on('error', e => reject(Object.assign(e, { code: 'ESPAWN' })));
-
-    const killAfterMs = 15_000;
-    const to = setTimeout(() => { try { py.kill('SIGKILL'); } catch {} reject(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })); }, killAfterMs);
-
-    py.on('close', (code) => {
-      clearTimeout(to);
-      if (code !== 0) {
-        const e = new Error(err || `python exited ${code}`);
-
-        const mSteps = /ETOO_MANY_STEPS\s+steps=(\d+)\s+t=(\S+)\s+dt=(\S+)/i.exec(err || '');
-        const mT     = /EBADPARAMS:T_NONPOS\s+t=(\S+)/i.exec(err || '');
-        const mDt    = /EBADPARAMS:DT_NONPOS\s+dt=(\S+)/i.exec(err || '');
-        const mZ     = /EBADPARAMS:ZETA\s+zeta=(\S+)/i.exec(err || '');
-        const mWn    = /EBADPARAMS:WN\s+wn=(\S+)/i.exec(err || '');
-        const mJson  = /EBADJSON/i.test(err || '');
-
-        if (mSteps) { e.code='STEP_TOO_MANY_STEPS'; e.meta={ steps:mSteps[1], t:mSteps[2], dt:mSteps[3] }; }
-        else if (mT) { e.code='STEP_BAD_T'; e.meta={ t:mT[1] }; }
-        else if (mDt){ e.code='STEP_BAD_DT'; e.meta={ dt:mDt[1] }; }
-        else if (mZ) { e.code='STEP_BAD_ZETA'; e.meta={ zeta:mZ[1] }; }
-        else if (mWn){ e.code='STEP_BAD_WN'; e.meta={ wn:mWn[1] }; }
-        else if (mJson) { e.code='EBADJSON'; }
-        else if (/EPY_MPL/i.test(err)) { e.code='EPY'; }
-        else if (/EBADPARAMS/i.test(err)) { e.code='EBADPARAMS'; }
-        else { e.code='EPY'; }
-
-        return reject(e);
-      }
-
+    p.stdout.on('data', d => out += d.toString());
+    p.stderr.on('data', d => err += d.toString());
+    p.on('close', () => {
+      if (!out) return reject({ code:'EBADJSON', message:'no output', stderr:err });
       try {
-        const res = JSON.parse(out); // { img, metrics }
-        resolve(res);
+        const parsed = JSON.parse(out);
+        if (parsed.error) return reject(parsed);
+        resolve(parsed);
       } catch (e) {
-        reject(Object.assign(e, { code: 'EBADJSON' }));
+        reject({ code:'EBADJSON', message:e.message, raw:out, stderr:err });
       }
     });
-
-    try {
-      py.stdin.write(JSON.stringify(payload));
-      py.stdin.end();
-    } catch (e) {
-      clearTimeout(to);
-      reject(Object.assign(e, { code: 'EPIPE' }));
-    }
+    p.stdin.end(Buffer.from(JSON.stringify(payload)));
   });
 }
 
-module.exports = { parseStepArgs, handleStepCommand };
+function buildStepCaption(metrics) {
+  const tsStr = (metrics.ts == null) ? '— (no entró en banda ±2% durante T)' : f2(metrics.ts);
+  const mpStr = (metrics.Mp == null) ? '—' : f1(metrics.Mp);
+  return (
+    `Respuesta al escalón (A=${f2(metrics.A)}). Planta 2º orden (ζ=${f2(metrics.zeta)}, ωₙ=${f2(metrics.wn)} rad/s). ` +
+    `PID: Kp=${f2(metrics.Kp)}, Ki=${f2(metrics.Ki)}, Kd=${f2(metrics.Kd)}.\n` +
+    `Métricas: tr≈${f2(metrics.tr)} s, Mp≈${mpStr} %, ts≈${tsStr} s, error final≈${f2(metrics.ess)}.`
+  );
+}
+
+async function handleStepCommand(params) {
+  const payload = {
+    A: params.A, Kp: params.Kp, Ki: params.Ki, Kd: params.Kd,
+    t: params.t, dt: params.dt, zeta: params.zeta, wn: params.wn
+  };
+  const res = await runPython(payload);
+  return { img: res.img, metrics: res.metrics, caption: buildStepCaption(res.metrics) };
+}
+
+module.exports = {
+  parseStepArgs,
+  handleStepCommand,
+  buildStepCaption,
+};
