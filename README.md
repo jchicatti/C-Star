@@ -47,6 +47,9 @@ Or just run the installer.
 # Try the demo now!
 For free. No installs. To start using, just send a WhatsApp message to:
 ```
++49 176 30274837
+```
+```
 +52 56 4137 8115
 ```
 Looking for a Watchdog Timer for a server hosting a service like this one?
