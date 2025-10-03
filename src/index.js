@@ -36,7 +36,7 @@ const MODEL_URL = 'http://127.0.0.1:11434/api/generate';
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const client = new Client({
   puppeteer: {
-    headless: true,
+    headless: true, // para ver qué pasa
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -46,10 +46,12 @@ const client = new Client({
       '--disable-extensions',
     ],
   },
+  // quita webVersionCache mientras depuras
   authStrategy: new LocalAuth({ dataPath: path.join(basePath, '.wwebjs_auth') }),
   takeoverOnConflict: true,
   restartOnAuthFail: true,
 });
+
 console.log('Cliente creado, esperando inicializar...');
 const startTime = new Date();
 // Helper function to remove accents/diacritics from a string
@@ -194,11 +196,12 @@ async function askModel(prompt) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'phi3',
-      prompt: contextDelimiter + prompt,
+      model: 'gemma3',
+	  system: contextDelimiter,
+      prompt: prompt,
       options: {
         maxTo: maxTokens,
-        temperature: 0.7
+        temperature: 0.9
       },
       stream: false
     })
@@ -764,7 +767,6 @@ client.on('message', async msg => {
 		await client.sendMessage(msg.from, txt);
 	  }
 	}
-
 	/*
 	else if (lowerBody.startsWith('!pro')) {
 		const query = msg.body.slice(5).trim();
@@ -778,7 +780,7 @@ client.on('message', async msg => {
 		}
 		functionCounts.dalleCount++;
 	}
-	/*
+	*/
 	else{
 		const query = msg.body;
 		//console.log(`str = (${typeof query})`, query);
@@ -791,7 +793,6 @@ client.on('message', async msg => {
 		}
 		functionCounts.gptCount++;
 	}
-	*/
 });
 
 /*	TAKEOFF
