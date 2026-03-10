@@ -1,37 +1,41 @@
 # Aviso de privacidad
 
-## Identidad y domicilio del responsable
+## Responsable del tratamiento de datos personales
 
-El responsable del tratamiento de datos personales es el titular del repositorio del proyecto y operador del prototipo.
+El responsable del tratamiento de los datos personales es el autor del proyecto de tesis, en el marco de una prueba de concepto académica sin fines comerciales.
 
-## Datos personales tratados
+## Datos personales recabados
 
-El sistema trata identificadores de cuenta de la plataforma de mensajería y el contenido de los mensajes que el usuario envía.
+El sistema utiliza identificadores de cuenta proporcionados por la plataforma de mensajería con el único propósito de:
 
-## Finalidades
+- Enrutar mensajes.
+- Responder consultas.
+- Generar métricas de uso agregadas.
 
-Finalidad principal. Proveer respuestas automáticas a consultas enviadas por mensajería.
+No se solicita información personal adicional.
+No se almacenan conversaciones completas en servidores propios.
 
-Finalidades secundarias. Generar métricas de uso y métricas operativas del prototipo sin conservar el contenido de las conversaciones.
+## Finalidades del tratamiento
 
-## Conservación y eliminación
+Los datos se utilizan exclusivamente para:
 
-El contenido de mensajes se conserva en el canal de mensajería y se elimina en 24 horas mediante mensajes temporales. El servidor no conserva copias persistentes del contenido de conversaciones.
+- Proveer el servicio de consulta automatizada.
+- Generar métricas técnicas de funcionamiento.
+- Evaluar desempeño del prototipo académico.
 
-Los registros del sistema conservan métricas agregadas y eventos técnicos sin contenido de mensajes. La retención de logs se limita al periodo necesario para evaluación del prototipo.
+## Eliminación de información
+
+Los mensajes se eliminan automáticamente del canal mediante la función de mensajes temporales configurada a 24 horas.  
+El servidor no conserva copias persistentes de las conversaciones.
 
 ## Transferencias
 
-El sistema puede enviar el contenido de la consulta a servicios externos necesarios para generar la respuesta. El aviso se entrega antes del tratamiento para que el usuario tome una decisión informada.
+No se realizan transferencias de datos personales fuera de los servicios utilizados para la operación técnica del sistema.
 
-## Medios para conocer el aviso
+## Derechos ARCO
 
-El enlace a este aviso se envía al usuario en el primer intercambio dentro del canal de mensajería.
+El usuario puede ejercer derechos de acceso, rectificación, cancelación u oposición conforme a la legislación mexicana enviando una solicitud al repositorio oficial del proyecto.
 
-## Derechos ARCO y medios de contacto
+## Fundamento legal
 
-El titular puede ejercer derechos de acceso rectificación cancelación u oposición. La solicitud se recibe por el canal de contacto publicado en el repositorio.
-
-## Cambios al aviso
-
-Cualquier actualización se publicará en el repositorio. El enlace enviado al usuario apuntará a la versión vigente.
+Este aviso se formula conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares y a los Lineamientos del Aviso de Privacidad publicados por el Instituto Nacional de Transparencia.
