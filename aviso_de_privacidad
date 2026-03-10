@@ -1,0 +1,37 @@
+# Aviso de privacidad
+
+## Identidad y domicilio del responsable
+
+El responsable del tratamiento de datos personales es el titular del repositorio del proyecto y operador del prototipo.
+
+## Datos personales tratados
+
+El sistema trata identificadores de cuenta de la plataforma de mensajería y el contenido de los mensajes que el usuario envía.
+
+## Finalidades
+
+Finalidad principal. Proveer respuestas automáticas a consultas enviadas por mensajería.
+
+Finalidades secundarias. Generar métricas de uso y métricas operativas del prototipo sin conservar el contenido de las conversaciones.
+
+## Conservación y eliminación
+
+El contenido de mensajes se conserva en el canal de mensajería y se elimina en 24 horas mediante mensajes temporales. El servidor no conserva copias persistentes del contenido de conversaciones.
+
+Los registros del sistema conservan métricas agregadas y eventos técnicos sin contenido de mensajes. La retención de logs se limita al periodo necesario para evaluación del prototipo.
+
+## Transferencias
+
+El sistema puede enviar el contenido de la consulta a servicios externos necesarios para generar la respuesta. El aviso se entrega antes del tratamiento para que el usuario tome una decisión informada.
+
+## Medios para conocer el aviso
+
+El enlace a este aviso se envía al usuario en el primer intercambio dentro del canal de mensajería.
+
+## Derechos ARCO y medios de contacto
+
+El titular puede ejercer derechos de acceso rectificación cancelación u oposición. La solicitud se recibe por el canal de contacto publicado en el repositorio.
+
+## Cambios al aviso
+
+Cualquier actualización se publicará en el repositorio. El enlace enviado al usuario apuntará a la versión vigente.
